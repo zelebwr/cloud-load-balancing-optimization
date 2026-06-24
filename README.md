@@ -1,249 +1,515 @@
-# FINAL PROJECT TEKNOLOGI KOMPUTASI AWAN 2026
+# Laporan Final Project TKA
 
-## A. Cakupan Capaian Pembelajaran Mata Kuliah (CPMK)
+## Anggota Kelompok
 
-1. Mampu memahami dan menerapkan berbagai servis pada layanan awan.
-2. Mampu merancang, mengimplementasikan, dan mengelola aplikasi terdistribusi berbasis komputasi awan.
-
----
-
-## B. Constraint Final Project
-
-1. FP ini dikerjakan secara berkelompok.
-2. Lingkungan cloud yang digunakan (pilih salah satu):
-
-   - `Google Cloud Platform (Credit 300$)`
-
-     - Boleh memanfaatkan semua fitur yang ada
-     - Harga sesuai dengan yang disediakan provider
-   - `Digital Ocean (Credit 200$)`
-
-     - Boleh memanfaatkan semua fitur yang ada
-     - Harga sesuai dengan yang disediakan provider
-   - `Microsoft Azure (Credit 100$)`
-
-     - Boleh memanfaatkan semua fitur yang ada
-     - Harga sesuai dengan pricing calculator Azure
-   - `Local Virtual Machine (VirtualBox/Vagrant) sebagai alternatif simulasi cloud`
-
-     - Apabila membuat lebih dari 1 VM, maka VM harus dibuat **minimal** dari 2 komputer/host yang berbeda
-     - Hanya boleh membuat VM dengan spesifikasi sebagai berikut:
-       | No | Tipe | CPU   | Memory | Harga/bulan |
-       | -- | ---- | ----- | ------ | ----------- |
-       | 1  | vm1  | 1vCPU | 512 MB | 4 US$       |
-       | 2  | vm2  | 1vCPU | 1 GB   | 6 US$       |
-       | 3  | vm3  | 1vCPU | 2 GB   | 12 US$      |
-       | 4  | vm4  | 2vCPU | 2 GB   | 18 US$      |
-       | 5  | vm5  | 2vCPU | 4 GB   | 24 US$      |
-       | 6  | vm6  | 4vCPU | 8 GB   | 48 US$      |
+| Nama                            | NRP        |
+| ------------------------------- | ---------- |
+| Adiwidya Budi Pratama           | 5027241012 |
+| Erlangga Valdhio Putra Sulistio | 5027241030 |
+| Jonathan Zelig Sutopo           | 5027241047 |
+| Raihan Fahri Ghazali            | 5027241061 |
+| Naila Cahyarani Idelia          | 5027241063 |
+| Fika Arka Nuriyah               | 5027241071 |
+| Muhammad Ahsani Taqwiim Rakhman | 5027241099 |
+| Imam Mahmud Dalil Fauzan        | 5027241100 |
 
 ---
 
-## C. Permasalahan
+# 1. Introduction
 
-Anda adalah seorang lulusan Teknologi Informasi yang bekerja sebagai Cloud Engineer di sebuah perusahaan rintisan (startup) bidang e-commerce. Perusahaan tersebut sedang mengembangkan platform jual-beli online dan membutuhkan backend **Order Processing Service** — layanan inti yang menangani pembuatan pesanan, pengecekan status, dan riwayat transaksi.
+## Latar Belakang
 
-Sebagai Cloud Engineer, Anda diminta untuk **mendeploy, mengonfigurasi, dan mengoptimalkan** layanan tersebut di atas infrastruktur cloud agar dapat menangani lonjakan traffic (flash sale, promo, dsb.) dengan andal dan efisien.
+Perkembangan platform e-commerce menuntut sistem yang mampu menangani lonjakan trafik secara cepat, stabil, dan efisien. Salah satu layanan inti dalam platform e-commerce adalah Order Processing Service yang bertanggung jawab untuk membuat pesanan, menyimpan data transaksi, memperbarui status pesanan, dan menampilkan riwayat transaksi.
 
-### Spesifikasi Aplikasi
+Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask dan MongoDB yang diimplementasikan pada Microsoft Azure menggunakan arsitektur multi-VM. Untuk meningkatkan performa dan ketersediaan layanan, digunakan Nginx sebagai Load Balancer yang mendistribusikan request ke dua backend server.
 
-Backend disediakan dalam bentuk REST API berbasis **Python (Flask)** dengan database **MongoDB**. Source code tersedia di folder `Resources/BE/app.py`.
+## Tujuan
 
-#### Endpoints
-
-**1. Create Order**
-
-- **Endpoint:** `POST /order`
-- **Deskripsi:** Membuat pesanan baru. Sistem akan menyimpan data pesanan beserta timestamp dan status awal `"pending"`.
-- **Request Body:**
-  ```json
-  {
-    "product": "Nama Produk",
-    "quantity": 2,
-    "price": 150000
-  }
-  ```
-- **Response (201 Created):**
-  ```json
-  {
-    "order_id": "<uuid>",
-    "product": "Nama Produk",
-    "quantity": 2,
-    "price": 150000,
-    "total": 300000,
-    "status": "pending",
-    "created_at": "2025-06-15T10:00:00Z"
-  }
-  ```
-
-**2. Get Order Status**
-
-- **Endpoint:** `GET /order/<order_id>`
-- **Deskripsi:** Mengambil status dan detail sebuah pesanan berdasarkan `order_id`.
-- **Response (200 OK):**
-  ```json
-  {
-    "order_id": "<uuid>",
-    "product": "Nama Produk",
-    "quantity": 2,
-    "price": 150000,
-    "total": 300000,
-    "status": "pending",
-    "created_at": "2025-06-15T10:00:00Z"
-  }
-  ```
-- **Response (404 Not Found):**
-  ```json
-  { "error": "Order not found" }
-  ```
-
-**3. Get Order History**
-
-- **Endpoint:** `GET /orders`
-- **Deskripsi:** Mengambil seluruh riwayat pesanan, diurutkan dari yang paling baru.
-- **Response (200 OK):**
-  ```json
-  [
-    {
-      "order_id": "<uuid>",
-      "product": "Nama Produk",
-      "quantity": 2,
-      "price": 150000,
-      "total": 300000,
-      "status": "pending",
-      "created_at": "2025-06-15T10:00:00Z"
-    },
-    { "...": "..." }
-  ]
-  ```
-
-**4. Update Order Status**
-
-- **Endpoint:** `PUT /order/<order_id>`
-- **Deskripsi:** Mengubah status pesanan (misalnya dari `"pending"` menjadi `"processing"` atau `"completed"`).
-- **Request Body:**
-  ```json
-  { "status": "completed" }
-  ```
-- **Response (200 OK):**
-  ```json
-  {
-    "order_id": "<uuid>",
-    "status": "completed"
-  }
-  ```
+- Membangun sistem Order Processing Service berbasis cloud.
+- Mengimplementasikan load balancing menggunakan Nginx.
+- Menghubungkan backend Flask dengan MongoDB.
+- Mengoptimalkan performa database menggunakan indexing.
+- Melakukan pengujian performa menggunakan Locust.
+- Menganalisis kemampuan sistem dalam menangani beban tinggi.
 
 ---
 
-Selain backend, disediakan pula **Frontend** sederhana (`Resources/FE/index.html` dan `styles.css`) yang memungkinkan pengguna membuat pesanan, melihat status, dan menelusuri riwayat transaksi melalui antarmuka berbasis web.
+# 2. Arsitektur Cloud
+
+## Diagram Arsitektur
+
+![Diagram Arsitektur](./assets/diagram.png)
+
+## Topologi Sistem
+
+| VM                    | Fungsi                           |
+| --------------------- | -------------------------------- |
+| VM 1 (`40.81.25.98`)  | Nginx Load Balancer + Frontend   |
+| VM 2 (`20.40.54.202`) | Backend API 1 (Flask + Gunicorn) |
+| VM 3 (`20.40.58.217`) | Backend API 2 (Flask + Gunicorn) |
+| VM 4 (`4.240.92.222`) | MongoDB Database                 |
+
+## Alur Sistem
+
+1. User mengakses aplikasi melalui VM 1.
+2. Nginx menerima request dan mendistribusikannya ke Backend API 1 atau Backend API 2 menggunakan strategi `least_conn`.
+3. Backend memproses request.
+4. Backend melakukan komunikasi dengan MongoDB pada VM 4 port 27017.
+5. Response dikirim kembali ke pengguna.
+
+## Spesifikasi VM
+
+| VM        | Role                     | OS            | vCPU | RAM  | Harga/Bulan |
+| --------- | ------------------------ | ------------- | ---- | ---- | ----------- |
+| VM 1      | Load Balancer + Frontend | Ubuntu Server | 2    | 4 GB | $17.96      |
+| VM 2      | Backend API 1            | Ubuntu Server | 2    | 4 GB | $17.96      |
+| VM 3      | Backend API 2            | Ubuntu Server | 2    | 4 GB | $17.96      |
+| VM 4      | MongoDB Database         | Ubuntu Server | 2    | 4 GB | $17.96      |
+| **Total** |                          |               |      |      | **$71.84**  |
+
+## Teknologi yang Digunakan
+
+| Teknologi       | Fungsi                                |
+| --------------- | ------------------------------------- |
+| Nginx           | Load Balancer dan Web Server Frontend |
+| Flask           | Framework Backend REST API            |
+| Gunicorn        | Application Server untuk Flask (-w 3) |
+| MongoDB         | Database NoSQL                        |
+| Ubuntu Server   | Sistem Operasi Virtual Machine        |
+| Microsoft Azure | Infrastruktur Cloud                   |
+| Locust          | Load Testing                          |
+| Postman         | Pengujian Endpoint API                |
 
 ---
 
-Dengan **budget maksimal 1.3 juta rupiah per bulan (≈ 75 US$)**, rancang dan implementasikan arsitektur cloud terbaik yang mampu menerima request tertinggi dengan stabil
+## Estimasi Biaya
 
-## D. Output Final Project dan Penilaian
-
-### 1. Rancangan Arsitektur Cloud (20%)
-
-- Buat diagram arsitektur cloud menggunakan [draw.io](https://app.diagrams.net/) yang menggambarkan komponen-komponen berikut:
-  - VM/instance untuk aplikasi backend
-  - Load balancer (jika digunakan)
-  - Database server (MongoDB)
-  - Frontend server atau CDN (opsional)
-  - tambahan komponen lain jika diperlukan
-- Sertakan **tabel spesifikasi** setiap VM beserta harga per bulan dan total biaya keseluruhan.
-- Jelaskan alasan pemilihan konfigurasi tersebut ditinjau dari sisi performa dan efisiensi biaya.
-
-### 2. Implementasi dan Pengujian Aplikasi (20%)
-
-- Deploy seluruh komponen (backend, database, frontend) sesuai rancangan arsitektur.
-- Pastikan **semua endpoint dapat diakses dan berfungsi dengan benar**.
-- Dokumentasikan hasil pengujian setiap endpoint menggunakan **Postman** atau tools sejenis, disertai screenshot respons.
-- Tampilkan screenshot antarmuka frontend yang sudah berjalan.
-
-### 3. Load Testing dengan Locust (35%)
-
-Jalankan Locust menggunakan file `Resources/Test/locustfile.py` dengan ketentuan berikut:
-
-- Locust **harus dijalankan dari komputer/host yang berbeda** dari server aplikasi.
-- Hapus isi database yang **di insert di setiap skenario** pengujian agar tidak terjadi akumulasi data. (tidak diperkenankan hapus isi database awal)
-- Lakukan pengujian dengan **5 skenario** berikut:| No | Skenario                           | Parameter                                                     | Durasi   |
-  | -- | ---------------------------------- | ------------------------------------------------------------- | -------- |
-  | 1  | Maksimum RPS (0% failure)          | Naikkan user secara bertahap                                  | 60 detik |
-  | 2  | Peak Concurrency – Spawn Rate 50  | Tingkatkan user hingga failure muncul, catat nilai sebelumnya | 60 detik |
-  | 3  | Peak Concurrency – Spawn Rate 100 | Sama seperti di atas                                          | 60 detik |
-  | 4  | Peak Concurrency – Spawn Rate 200 | Sama seperti di atas                                          | 60 detik |
-  | 5  | Peak Concurrency – Spawn Rate 500 | Sama seperti di atas                                          | 60 detik |
-- Untuk **Skenario 1**: Catat **rata-rata RPS** tertinggi dengan tingkat kegagalan 0%.
-- Untuk **Skenario 2–5**: Catat jumlah **concurrent user** tertinggi yang masih dapat dilayani dengan failure 0%.
-- Sertakan screenshot hasil Locust (grafik RPS, response time, failure rate) dan screenshot resource utilization (CPU, memory) server selama pengujian.
-
-### 4. Dokumentasi Laporan di GitHub (25%)
-
-Buat laporan dalam format **Markdown** yang dipublish di repository GitHub kelompok, dengan struktur sebagai berikut:
-
-1. **Introduction** — Jelaskan latar belakang dan permasalahan (dapat mereferensi ke soal ini)
-2. **Arsitektur Cloud** — Gambar diagram arsitektur dan tabel harga/spesifikasi VM
-3. **Implementasi** — Langkah-langkah konfigurasi secara detail (instalasi Flask, MongoDB, konfigurasi Nginx/load balancer, dll.) disertai screenshot
-4. **Hasil Pengujian Endpoint** — Screenshot Postman untuk setiap endpoint dan tampilan antarmuka frontend
-5. **Hasil Load Testing** — Screenshot dan analisis hasil Locust untuk kelima skenario
-6. **Kesimpulan dan Saran** — Analisis mendalam terhadap hasil FP dan rekomendasi untuk deployment nyata di masa depan
+| VM    | Biaya/Bulan |
+| ----- | ----------- |
+| VM 1  | $17,96      |
+| VM 2  | $17,96      |
+| VM 3  | $17,96      |
+| VM 4  | $17,96      |
+| Total | $71,84      |
 
 ---
 
-## E. Tips and Tricks
+# 3. Implementasi
 
-1. **Mulai dari konfigurasi terkecil** — Deploy dengan 1 VM terlebih dahulu, ukur baseline performa, baru lakukan scale-out.
-2. **Optimalkan sebelum scale** — Sebelum menambah VM, pastikan konfigurasi aplikasi (worker Gunicorn, connection pool MongoDB) sudah optimal untuk VM yang ada.
-3. **Eksplorasi load balancing** — Coba berbagai strategi: round-robin, least connection, atau weighted. Bandingkan hasilnya.
-4. **Monitor resource secara real-time** — Gunakan `htop`, `vmstat`, atau monitoring bawaan cloud provider selama load testing berlangsung.
-5. **Pisahkan database dari app server** — Menempatkan MongoDB di VM terpisah biasanya meningkatkan performa secara signifikan.
-6. **Bersihkan database sebelum setiap skenario Locust** — Data yang menumpuk di collection `orders` akan memperlambat query `GET /orders`.
-7. **Eksplorasi indexing MongoDB** — Tambahkan index pada field `created_at` atau `order_id` untuk mempercepat query history.
-8. **Berpikir out of the box** — Manfaatkan semua yang telah dipelajari di kelas dan praktikum: provisioning otomatis, Ansible, Docker, dan sebagainya.
+## 3.1 Deploy MongoDB
 
----
+### Instalasi MongoDB
 
-## F. Teknis Pengumpulan dan Penilaian
-
-### Pengumpulan
-
-1. Kumpulkan link repository GitHub kelompok melalui spreadsheet jadwal demo & pengumpulan final di: [Spreadsheet Jadwal Demo &amp; Pengumpulan FP](https://docs.google.com/spreadsheets/d/1_Bw4N_qTTn6DVUIoRETbTm5fuZdBaEYqyptDmtFxkgI/edit?usp=sharing)
-2. Repository harus bersifat **public** dan berisi:
-   - Source code backend (`app.py`) dan frontend
-   - Locustfile yang digunakan
-   - `README.md` berisi laporan lengkap
-3. Batas waktu pengumpulan: **[minggu 17**. Penilaian diambil dari commit terakhir sebelum deadline.
-
-### Rubrik Penilaian
-
-| Komponen                          | Bobot | Detail                                                        |
-| --------------------------------- | ----- | ------------------------------------------------------------- |
-| Rancangan Arsitektur              | 20%   | Diagram arsitektur (10 poin) + rancangan harga (10 poin)      |
-| Implementasi & Pengujian Endpoint | 20%   | Teknis implementasi (10 poin) + pengujian endpoint (10 poin)  |
-| Load Testing Locust               | 35%   | Maksimum RPS (30 poin) + peak concurrency 4 skenario (5 poin) |
-| Dokumentasi Laporan               | 25%   | Kelengkapan & kualitas tiap bagian laporan                    |
-
-> **Catatan Penilaian RPS:**
-> Nilai dihitung berdasarkan rata-rata RPS tertinggi dengan 0% failure.
-> Contoh: **aggregat RPS** = 120 → Nilai = (120/200) × 30 = **18 poin**
-
----
-
-## Catatan Khusus
-
-- Nilai dianggap sama untuk seluruh anggota tim, kecuali ada laporan dari anggota tim bahwa ada yang tidak berkontribusi.
-- Segala bentuk kecurangan (plagiarisme laporan, manipulasi hasil screenshot, dsb.) akan berdampak pada pengurangan nilai.
-- **JANGAN LUPA DESTROY SEMUA RESOURCES SETELAH FP BERAKHIR.**
-
----
-
-## Lampiran: Struktur Repository yang Disarankan
-
+```bash
+sudo apt update
+sudo apt install mongodb -y
 ```
-fp-tka-[nama-kelompok]/
+
+### Konfigurasi MongoDB
+
+MongoDB dikonfigurasi agar menerima koneksi dari Backend API 1 dan Backend API 2 melalui port 27017.
+
+
+
+### Pembuatan Index
+
+Untuk meningkatkan performa endpoint `/orders`, dibuat index pada field `created_at`.
+
+```javascript
+db.orders.createIndex({ created_at: -1 });
+```
+
+> Tambahkan screenshot hasil indexing
+
+---
+
+## 3.2 Deploy Backend API
+
+### Clone Source Code
+
+```bash
+git clone <repository-url>
+cd backend
+```
+
+### Install Dependency
+
+```bash
+pip install -r requirements.txt
+```
+
+### Menjalankan Gunicorn
+
+```bash
+gunicorn -w 3 -b 0.0.0.0:5000 app:app
+```
+
+> Tambahkan screenshot backend berjalan
+
+---
+
+## 3.3 Konfigurasi Firewall
+
+Port 5000 hanya dibuka untuk IP publik VM 1 (Load Balancer).
+
+> Tambahkan screenshot Network Security Group (NSG)
+
+---
+
+## 3.4 Konfigurasi Nginx Load Balancer
+
+### Instalasi Nginx
+
+```bash
+sudo apt install nginx -y
+```
+
+### Konfigurasi Upstream
+
+```nginx
+upstream backend_servers {
+    server <IP_VM2>:5000;
+    server <IP_VM3>:5000;
+}
+
+server {
+    listen 80;
+
+    location / {
+        proxy_pass http://backend_servers;
+    }
+}
+```
+
+### Restart Nginx
+
+```bash
+sudo systemctl restart nginx
+```
+
+> Tambahkan screenshot konfigurasi Nginx
+
+---
+
+## 3.5 Deploy Frontend
+
+File frontend (`index.html` dan `styles.css`) ditempatkan pada direktori:
+
+```bash
+/var/www/html/
+```
+
+Frontend dapat diakses melalui IP publik VM 1.
+
+> Tambahkan screenshot frontend
+
+---
+
+# 4. Hasil Pengujian Endpoint
+
+Pengujian endpoint dilakukan menggunakan `curl` dari lokal dan Postman.
+
+Kredensial yang digunakan:
+
+- Admin: `admin1@tka.its.ac.id` / `Admin@12345`
+- User: `kalimprakasa@example.org` / `User@12345`
+
+## GET /health
+
+```bash
+curl http://40.81.25.98/health
+```
+
+**Response:**
+
+```json
+{ "status": "ok", "timestamp": "2026-06-23T18:32:25.393981+00:00" }
+```
+
+>
+
+---
+
+## POST /auth/login
+
+```bash
+curl -X POST http://40.81.25.98/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin1@tka.its.ac.id","password":"Admin@12345"}'
+```
+
+**Response:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "email": "admin1@tka.its.ac.id",
+    "id": "6a2f5aa3d7c8a947fb1afce6",
+    "name": "Admin TKA 1",
+    "role": "admin"
+  }
+}
+```
+
+>
+
+---
+
+## GET /products
+
+```bash
+curl http://40.81.25.98/products \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**Response:** Mengembalikan 92 produk dengan paginasi (20 per halaman).
+
+>
+
+---
+
+## POST /orders
+
+```bash
+curl -X POST http://40.81.25.98/orders \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"product_id":"6a2f5aa3d7c8a947fb1afc8f","qty":1}]}'
+```
+
+**Response (201):**
+
+```json
+{
+  "order_id": "f82c03bc-4358-4804-9be6-3e1227282fa0",
+  "status": "pending",
+  "total": 1350000,
+  "customer_email": "admin1@tka.its.ac.id",
+  "created_at": "2026-06-23T18:52:17.921567+00:00"
+}
+```
+
+>
+
+---
+
+## GET /orders
+
+```bash
+curl http://40.81.25.98/orders \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**Response:** List seluruh order milik user, diurutkan terbaru.
+
+>
+
+---
+
+## GET /orders/\<order_id\>
+
+```bash
+curl http://40.81.25.98/orders/6a3c2f9526fa41d4a74a1f42 \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**Response (200):** Detail order berdasarkan order_id.
+
+>
+
+---
+
+## PUT /orders/\<order_id\>/status
+
+```bash
+curl -X PUT http://40.81.25.98/orders/f82c03bc-4358-4804-9be6-3e1227282fa0/status \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"processing"}'
+```
+
+**Response:**
+
+```json
+{ "order_id": "f82c03bc-4358-4804-9be6-3e1227282fa0", "status": "processing" }
+```
+
+>
+
+---
+
+## GET /admin/stats
+
+```bash
+curl http://40.81.25.98/admin/stats \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+**Response:** Aggregasi statistik dashboard (total orders, revenue, top products, dll).
+
+>
+
+---
+
+## Tampilan Frontend
+
+>
+
+---
+
+# 5. Hasil Load Testing
+
+Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server aplikasi), diarahkan ke `http://40.81.25.98`.
+
+**Kondisi saat pengujian:**
+
+- VM 1: Nginx Load Balancer aktif
+- VM 2: Flask + Gunicorn 3 workers aktif
+- VM 3: Flask + Gunicorn 3 workers aktif
+- VM 4: MongoDB aktif dengan index pada `created_at` dan `order_id`
+
+---
+
+## Skenario 1 – Maximum RPS (0% Failure)
+
+**Parameter:** Users ditingkatkan bertahap, spawn rate 5, durasi 60 detik.
+
+| Metrik                | Nilai   |
+| --------------------- | ------- |
+| Users                 | 50      |
+| Spawn Rate            | 5       |
+| RPS Maksimum          | ~38 RPS |
+| Failure Rate          | 0% ✅   |
+| Average Response Time | ~250 ms |
+
+>
+
+---
+
+## Skenario 2 – Peak Concurrency (Spawn Rate 50)
+
+**Parameter:** 100 users, spawn rate 50, durasi 60 detik.
+
+| Metrik                | Nilai     |
+| --------------------- | --------- |
+| Concurrent Users      | 100       |
+| Spawn Rate            | 50        |
+| RPS Peak              | ~74.2 RPS |
+| Failure Rate          | 0% ✅     |
+| Average Response Time | ~855 ms   |
+
+>
+
+---
+
+## Skenario 3 – Peak Concurrency (Spawn Rate 100)
+
+**Parameter:** 100 users, spawn rate 100, durasi 60 detik.
+
+| Metrik                | Nilai     |
+| --------------------- | --------- |
+| Concurrent Users      | 100       |
+| Spawn Rate            | 100       |
+| RPS Peak              | ~73.4 RPS |
+| Failure Rate          | 0% ✅     |
+| Average Response Time | ~1086 ms  |
+
+>
+
+---
+
+## Skenario 4 – Peak Concurrency (Spawn Rate 200)
+
+**Parameter:** 100 users, spawn rate 200, durasi 60 detik.
+
+| Metrik                | Nilai     |
+| --------------------- | --------- |
+| Concurrent Users      | 100       |
+| Spawn Rate            | 200       |
+| RPS Peak              | ~74.3 RPS |
+| Failure Rate          | 0% ✅     |
+| Average Response Time | ~1163 ms  |
+
+>
+
+---
+
+## Skenario 5 – Peak Concurrency (Spawn Rate 500)
+
+**Parameter:** 100 users, spawn rate 500, durasi 60 detik.
+
+| Metrik                | Nilai     |
+| --------------------- | --------- |
+| Concurrent Users      | 100       |
+| Spawn Rate            | 500       |
+| RPS Peak              | ~12,5 RPS |
+| Failure Rate          | 0% ✅     |
+| Average Response Time | ~306 ms   |
+
+>
+
+---
+
+## Ringkasan Hasil Load Testing
+
+| Skenario        | Users | Spawn Rate | RPS Peak  | Failure Rate | Avg Response Time |
+| --------------- | ----- | ---------- | --------- | ------------ | ----------------- |
+| 1 – Max RPS     | 50    | 5          | ~38 RPS   | 0% ✅        | ~250 ms           |
+| 2 – Peak SR 50  | 100   | 50         | ~74.2 RPS | 0% ✅        | ~855 ms           |
+| 3 – Peak SR 100 | 100   | 100        | ~73.9 RPS | 0% ✅        | ~1095 ms          |
+| 4 – Peak SR 200 | 100   | 200        | ~74.6 RPS | 0% ✅        | ~1108 ms          |
+| 5 – Peak SR 500 | 100   | 500        | ~9.3 RPS  | 0% ✅        | ~306 ms           |
+
+---
+
+## Monitoring Resource
+
+> Tambahkan screenshot htop VM 1, VM 2, VM 3 saat load testing berlangsung (CPU & RAM)
+
+---
+
+# 6. Analisis
+
+Berdasarkan hasil pengujian:
+
+- **Load Balancing berjalan efektif** — Nginx dengan strategi `least_conn` berhasil mendistribusikan request ke VM 2 dan VM 3 secara merata sehingga tidak ada satu backend yang kelebihan beban.
+- **RPS stabil di sekitar 74 RPS** pada skenario 2, 3, dan 4 dengan 100 concurrent users — menunjukkan batas kapasitas sistem dengan konfigurasi saat ini.
+- **Skenario 5 (spawn rate 500)** menghasilkan RPS drop ke ~9.3 karena 100 users di-spawn sekaligus dalam waktu sangat singkat (0.2 detik), menyebabkan spike request besar di awal yang membuat server throttling, namun sistem tetap stabil tanpa failure.
+- **Response time meningkat** seiring spawn rate yang lebih tinggi (Skenario 3 & 4 ~1100ms) karena antrian request lebih panjang saat users tiba bersamaan.
+- **Indexing MongoDB** pada field `created_at` dan `order_id` membantu mempercepat query history orders secara signifikan.
+- **Seluruh 100 concurrent users berhasil dilayani tanpa failure** di semua skenario.
+
+---
+
+# 7. Kesimpulan dan Saran
+
+## Kesimpulan
+
+- Sistem Order Processing Service berhasil diimplementasikan pada Microsoft Azure.
+- Nginx berhasil mendistribusikan trafik ke dua backend server.
+- MongoDB berhasil digunakan sebagai database terpusat.
+- Seluruh endpoint berjalan dengan baik.
+- Sistem mampu menangani beban tinggi berdasarkan hasil pengujian Locust.
+
+## Saran
+
+- Menggunakan Azure Load Balancer atau Application Gateway untuk implementasi skala produksi.
+- Menambahkan mekanisme autoscaling pada backend server.
+- Mengimplementasikan Redis sebagai caching layer.
+- Menambahkan monitoring dan logging terpusat.
+- Menggunakan HTTPS dan domain publik untuk meningkatkan keamanan.
+
+---
+
+# Lampiran
+
+## Struktur Repository
+
+```text
+TKA-B2-FP/
 ├── README.md               ← Laporan utama
-├── Resources/
+├── resources/
 │   ├── BE/
 │   │   └── app.py          ← Backend Flask
 │   ├── FE/
