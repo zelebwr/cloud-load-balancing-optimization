@@ -109,8 +109,6 @@ sudo apt install mongodb -y
 
 MongoDB dikonfigurasi agar menerima koneksi dari Backend API 1 dan Backend API 2 melalui port 27017.
 
-
-
 ### Pembuatan Index
 
 Untuk meningkatkan performa endpoint `/orders`, dibuat index pada field `created_at`.
@@ -128,8 +126,17 @@ db.orders.createIndex({ created_at: -1 });
 ### Clone Source Code
 
 ```bash
-git clone <repository-url>
-cd backend
+git clone https://github.com/fuaddary/fp-tka-26
+cd fp-tka-26/Resources/BE
+cp app.py requirements.txt ~
+cd ~
+```
+
+### Set Python Virtual Environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
 ### Install Dependency
@@ -138,13 +145,47 @@ cd backend
 pip install -r requirements.txt
 ```
 
+### Set System Variables
+
+```bash
+echo 'export MONGO_URI="mongodb://4.240.92.222:27017/orderdb"' >> ~/.bashrc
+echo 'export JWT_SECRET="TK4_FPdul5"' >> ~/.bashrc
+```
+
 ### Menjalankan Gunicorn
 
 ```bash
 gunicorn -w 3 -b 0.0.0.0:5000 app:app
 ```
 
-> Tambahkan screenshot backend berjalan
+### Konfigurasi Service Daemon (Persistence)
+
+Konfigurasi file `/etc/systemd/system/gunicorn-backend.service`:
+
+```service
+[Unit]
+Description=Gunicorn instance serving TKA-B2-FP Order Processing API
+After=network.target
+
+[Service]
+User=azureuser
+Group=www-data
+WorkingDirectory=/home/azureuser/
+Environment="MONGO_URI=mongodb://4.240.92.222:27017/orderdb"
+Environment="JWT_SECRET=TK4_FPdul5"
+ExecStart=/home/azureuser/.venv/bin/gunicorn -w 3 -b 0.0.0.0:5000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Mengaktifkan Autostart Backend
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now gunicorn-backend
+```
 
 ---
 
@@ -168,26 +209,75 @@ sudo apt install nginx -y
 
 ```nginx
 upstream backend_servers {
-    server <IP_VM2>:5000;
-    server <IP_VM3>:5000;
+    least_conn;
+    server 20.40.54.202:5000;
+    server 20.40.58.217:5000;
 }
 
-server {
+server{
     listen 80;
+    server_name 40.81.25.98;
+
+    root /var/www/html;
+    index index.html;
 
     location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location /health {
         proxy_pass http://backend_servers;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /auth/ {
+        proxy_pass http://backend_servers;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /products {
+        proxy_pass http://backend_servers;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /orders {
+        proxy_pass http://backend_servers;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /admin/ {
+        proxy_pass http://backend_servers;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
 ```
 
-### Restart Nginx
+### Symlink Routing Nginx
 
-```bash
-sudo systemctl restart nginx
+```bash 
+sudo rm /etc/nginx/sites-enabled/default
+sudo ln -s /etc/nginx/sites-available/loadbalancer /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-> Tambahkan screenshot konfigurasi Nginx
+### Check Nginx Berjalan
+
+```bash
+sudo systemctl is-enabled nginx
+```
+
+![nginx running](./assets/nginx.png)
 
 ---
 
@@ -201,7 +291,8 @@ File frontend (`index.html` dan `styles.css`) ditempatkan pada direktori:
 
 Frontend dapat diakses melalui IP publik VM 1.
 
-> Tambahkan screenshot frontend
+![forntend](./assets/frontend.png)
+![frontend 2](./assets/frontend2.png)
 
 ---
 
@@ -226,7 +317,7 @@ curl http://40.81.25.98/health
 { "status": "ok", "timestamp": "2026-06-23T18:32:25.393981+00:00" }
 ```
 
->
+![endpoint1](./assets/endpoint1.png)
 
 ---
 
@@ -252,7 +343,7 @@ curl -X POST http://40.81.25.98/auth/login \
 }
 ```
 
->
+![endpoint2](./assets/endpoint2.png)
 
 ---
 
@@ -260,12 +351,13 @@ curl -X POST http://40.81.25.98/auth/login \
 
 ```bash
 curl http://40.81.25.98/products \
-  -H "Authorization: Bearer <TOKEN>"
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YTJmNWFhM2Q3YzhhOTQ3ZmIxYWZjZTYiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODI0MzA4NjQsImlhdCI6MTc4MjM0NDQ2NH0.4V2q3QYZePKOCM7T1smUwp57xeOvHIM1JxbAnlmIw8s"
 ```
 
 **Response:** Mengembalikan 92 produk dengan paginasi (20 per halaman).
 
->
+![endpoint3](./assets/endpoint3.png)
+
 
 ---
 
@@ -290,7 +382,7 @@ curl -X POST http://40.81.25.98/orders \
 }
 ```
 
->
+![endpoint4](./assets/endpoint4.png)
 
 ---
 
@@ -303,7 +395,7 @@ curl http://40.81.25.98/orders \
 
 **Response:** List seluruh order milik user, diurutkan terbaru.
 
->
+
 
 ---
 
@@ -316,7 +408,7 @@ curl http://40.81.25.98/orders/6a3c2f9526fa41d4a74a1f42 \
 
 **Response (200):** Detail order berdasarkan order_id.
 
->
+![endpoint5](./assets/endpoint5.png)
 
 ---
 
@@ -335,7 +427,7 @@ curl -X PUT http://40.81.25.98/orders/f82c03bc-4358-4804-9be6-3e1227282fa0/statu
 { "order_id": "f82c03bc-4358-4804-9be6-3e1227282fa0", "status": "processing" }
 ```
 
->
+![endpoint6](./assets/endpoint6.png)
 
 ---
 
@@ -348,13 +440,13 @@ curl http://40.81.25.98/admin/stats \
 
 **Response:** Aggregasi statistik dashboard (total orders, revenue, top products, dll).
 
->
+![endpoint7](./assets/endpoint7.png)
 
 ---
 
 ## Tampilan Frontend
 
->
+![frontend-view](./assets/frontend-view.png)
 
 ---
 
@@ -383,7 +475,7 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | Failure Rate          | 0% ✅   |
 | Average Response Time | ~250 ms |
 
->
+![locust1](./assets/locust1.png)
 
 ---
 
@@ -399,7 +491,7 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | Failure Rate          | 0% ✅     |
 | Average Response Time | ~855 ms   |
 
->
+![locust2](./assets/locust2.png)
 
 ---
 
@@ -415,7 +507,7 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | Failure Rate          | 0% ✅     |
 | Average Response Time | ~1086 ms  |
 
->
+![locust3](./assets/locust3.png)
 
 ---
 
@@ -431,7 +523,7 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | Failure Rate          | 0% ✅     |
 | Average Response Time | ~1163 ms  |
 
->
+![locust4](./assets/locust4.png)
 
 ---
 
@@ -447,7 +539,7 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | Failure Rate          | 0% ✅     |
 | Average Response Time | ~306 ms   |
 
->
+![locust4](./assets/locust5.png)
 
 ---
 
