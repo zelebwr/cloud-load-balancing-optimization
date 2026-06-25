@@ -192,8 +192,13 @@ sudo systemctl enable --now gunicorn-backend
 ## 3.3 Konfigurasi Firewall
 
 Port 5000 hanya dibuka untuk IP publik VM 1 (Load Balancer).
+> VM 1
 
-> Tambahkan screenshot Network Security Group (NSG)
+> VM 2
+<img width="1080" height="1451" alt="08e9ed74-84bb-493e-b8fd-eef35d55d621" src="https://github.com/user-attachments/assets/178c7e14-aecd-4d59-ae4a-a5bffaa170a6" />
+
+> VM 3
+<img width="1600" height="681" alt="08f06ea8-3fb3-45df-be7f-6568cc0e582a" src="https://github.com/user-attachments/assets/0458d87b-8aed-4b74-b20f-c1fa86e8b1d6" />
 
 ---
 
@@ -358,7 +363,6 @@ curl http://40.81.25.98/products \
 
 ![endpoint3](./assets/endpoint3.png)
 
-
 ---
 
 ## POST /orders
@@ -395,7 +399,7 @@ curl http://40.81.25.98/orders \
 
 **Response:** List seluruh order milik user, diurutkan terbaru.
 
-
+![endpoint5](./assets/endpoint5.png)
 
 ---
 
@@ -408,7 +412,7 @@ curl http://40.81.25.98/orders/6a3c2f9526fa41d4a74a1f42 \
 
 **Response (200):** Detail order berdasarkan order_id.
 
-![endpoint5](./assets/endpoint5.png)
+<img width="449" height="83" alt="Screenshot 2026-06-25 110926" src="https://github.com/user-attachments/assets/ae6fd2a7-b96a-49d7-925a-ccf84c78ed21" />
 
 ---
 
