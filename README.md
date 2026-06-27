@@ -126,12 +126,15 @@ cd ~
 python3 -m venv .venv
 source .venv/bin/activate
 ```
+<img width="818" height="75" alt="image" src="https://github.com/user-attachments/assets/0be7a1ff-3034-4f24-abb3-a9a4d6bbb473" />
+
 
 ### Install Dependency
 
 ```bash
 pip install -r requirements.txt
 ```
+<img width="1906" height="353" alt="image" src="https://github.com/user-attachments/assets/dd9c0fa1-1fe4-45a5-9698-d3e1089abdda" />
 
 ### Set System Variables
 
@@ -139,6 +142,7 @@ pip install -r requirements.txt
 echo 'export MONGO_URI="mongodb://4.240.92.222:27017/orderdb"' >> ~/.bashrc
 echo 'export JWT_SECRET="TK4_FPdul5"' >> ~/.bashrc
 ```
+<img width="1284" height="49" alt="image" src="https://github.com/user-attachments/assets/74821351-e1ea-4230-af5b-f0d328a3c412" />
 
 ### Menjalankan Gunicorn
 
