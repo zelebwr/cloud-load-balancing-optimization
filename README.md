@@ -210,6 +210,7 @@ echo 'export JWT_SECRET="TK4_FPdul5"' >> ~/.bashrc
 ```bash
 gunicorn -w 3 -b 0.0.0.0:5000 app:app
 ```
+<img width="1572" height="178" alt="image" src="https://github.com/user-attachments/assets/3bf39166-7524-4e44-b50d-1bbf0b5e4d79" />
 
 ### Konfigurasi Service Daemon (Persistence)
 
