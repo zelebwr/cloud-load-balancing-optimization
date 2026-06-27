@@ -182,6 +182,7 @@ sudo systemctl enable --now gunicorn-backend
 Port 5000 pada kedua Backend API hanya mengizinkan koneksi dari VM 1 (Load Balancer) melalui aturan Network Security Group (NSG), sehingga backend tidak dapat diakses langsung dari internet.
 
 > VM 1
+<img width="1553" height="715" alt="image" src="https://github.com/user-attachments/assets/f9393d48-ebf6-4615-97fc-857996148de1" />
 
 > VM 2
 <img width="1080" height="1451" alt="08e9ed74-84bb-493e-b8fd-eef35d55d621" src="https://github.com/user-attachments/assets/178c7e14-aecd-4d59-ae4a-a5bffaa170a6" />
