@@ -84,28 +84,89 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 
 # 3. Implementasi
 
+# 3. Implementasi
+
 ## 3.1 Deploy MongoDB
 
 ### Instalasi MongoDB
 
+MongoDB Community Edition diinstal pada VM4 sebagai database server menggunakan repository resmi MongoDB.
+
 ```bash
 sudo apt update
-sudo apt install mongodb -y
+sudo apt install -y mongodb-org
+sudo systemctl start mongod
+sudo systemctl enable mongod
 ```
 
 ### Konfigurasi MongoDB
 
-MongoDB dikonfigurasi untuk menerima koneksi pada port 27017 dan hanya dapat diakses oleh Backend API 1 dan Backend API 2 melalui aturan Network Security Group (NSG).
+Agar dapat diakses oleh Backend API pada VM2 dan VM3, konfigurasi `bindIp` diubah menjadi `0.0.0.0`, kemudian service MongoDB di-restart.
 
-### Pembuatan Index
-
-Untuk meningkatkan performa endpoint `/orders`, dibuat index pada field `created_at`.
-
-```javascript
-db.orders.createIndex({ created_at: -1 });
+```yaml
+bindIp: 0.0.0.0
 ```
 
-> Tambahkan screenshot hasil indexing
+```bash
+sudo systemctl restart mongod
+```
+
+**Dokumentasi Konfigurasi MongoDB**
+
+> **Screenshot 1** – Status MongoDB 
+
+<img width="1451" height="335" alt="image" src="https://github.com/user-attachments/assets/3f7a3a0e-0495-4075-bf41-0b4b3b298c00" />
+
+---
+
+> **Screenshot 2** – Konfigurasi `bindIp` dan port 27017 
+
+<img width="1177" height="97" alt="image" src="https://github.com/user-attachments/assets/53a6b90e-2e36-46a4-97b7-22bffbfbf356" />
+
+---
+
+### Restore Database
+
+Database direstore menggunakan file dump yang tersedia pada repository.
+
+```bash
+mongorestore --drop ~/fp-tka-26/Resources/DB/dump
+```
+
+Verifikasi:
+
+```javascript
+use orderdb
+
+show collections
+
+db.products.countDocuments()
+db.users.countDocuments()
+db.orders.countDocuments()
+```
+
+**Dokumentasi Restore Database**
+
+> **Screenshot 3** – Hasil restore dan verifikasi database
+
+<img width="482" height="392" alt="image" src="https://github.com/user-attachments/assets/ce0084f5-bd41-4e8c-b07c-c2df7d1c399a" />
+
+---
+
+### Optimasi Database (Indexing)
+
+Untuk meningkatkan performa query pada collection `orders`, dibuat index pada field `created_at`.
+
+```javascript
+db.orders.createIndex({ created_at: -1 })
+db.orders.getIndexes()
+```
+
+**Dokumentasi Hasil Indexing**
+
+> **Screenshot 4** – 
+
+<img width="701" height="142" alt="image" src="https://github.com/user-attachments/assets/bad1ed24-d179-4f2e-90af-b7e2e6baea5a" />
 
 ---
 
