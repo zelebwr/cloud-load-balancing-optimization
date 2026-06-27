@@ -171,6 +171,8 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 ```
+<img width="1241" height="508" alt="image" src="https://github.com/user-attachments/assets/97a76c05-e4a7-48e4-ac92-b9dd2149ea28" />
+
 
 ### Mengaktifkan Autostart Backend
 
@@ -178,6 +180,7 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 sudo systemctl enable --now gunicorn-backend
 ```
+![Uploading image.png…]()
 
 ---
 
