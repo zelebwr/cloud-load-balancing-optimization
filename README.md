@@ -54,18 +54,18 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 1. User mengakses aplikasi melalui VM 1.
 2. Nginx menerima request dan mendistribusikannya ke Backend API 1 atau Backend API 2 menggunakan strategi `least_conn`.
 3. Backend memproses request.
-4. Backend melakukan komunikasi dengan MongoDB pada VM 4 port 27017.
+4. Backend berkomunikasi dengan MongoDB pada VM 4 melalui port 27017 untuk membaca atau menyimpan data.
 5. Response dikirim kembali ke pengguna.
 
 ## Spesifikasi VM
 
 | VM        | Role                     | OS            | vCPU | RAM  | Harga/Bulan |
 | --------- | ------------------------ | ------------- | ---- | ---- | ----------- |
-| VM 1      | Load Balancer + Frontend | Ubuntu Server | 2    | 4 GB | $17.96      |
+| VM 1      | Load Balancer + Frontend | Ubuntu Server | 2    | 1 GB | $9.56       |
 | VM 2      | Backend API 1            | Ubuntu Server | 2    | 4 GB | $17.96      |
 | VM 3      | Backend API 2            | Ubuntu Server | 2    | 4 GB | $17.96      |
 | VM 4      | MongoDB Database         | Ubuntu Server | 2    | 4 GB | $17.96      |
-| **Total** |                          |               |      |      | **$71.84**  |
+| **Total** |                          |               |      |      | **$63.44**  |
 
 ## Teknologi yang Digunakan
 
@@ -82,42 +82,89 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 
 ---
 
-## Estimasi Biaya
-
-| VM    | Biaya/Bulan |
-| ----- | ----------- |
-| VM 1  | $17,96      |
-| VM 2  | $17,96      |
-| VM 3  | $17,96      |
-| VM 4  | $17,96      |
-| Total | $71,84      |
-
----
-
 # 3. Implementasi
 
 ## 3.1 Deploy MongoDB
 
 ### Instalasi MongoDB
 
+MongoDB Community Edition diinstal pada VM4 sebagai database server menggunakan repository resmi MongoDB.
+
 ```bash
 sudo apt update
-sudo apt install mongodb -y
+sudo apt install -y mongodb-org
+sudo systemctl start mongod
+sudo systemctl enable mongod
 ```
 
 ### Konfigurasi MongoDB
 
-MongoDB dikonfigurasi agar menerima koneksi dari Backend API 1 dan Backend API 2 melalui port 27017.
+Agar dapat diakses oleh Backend API pada VM2 dan VM3, konfigurasi `bindIp` diubah menjadi `0.0.0.0`, kemudian service MongoDB di-restart.
 
-### Pembuatan Index
-
-Untuk meningkatkan performa endpoint `/orders`, dibuat index pada field `created_at`.
-
-```javascript
-db.orders.createIndex({ created_at: -1 });
+```yaml
+bindIp: 0.0.0.0
 ```
 
-> Tambahkan screenshot hasil indexing
+```bash
+sudo systemctl restart mongod
+```
+
+**Dokumentasi Konfigurasi MongoDB**
+
+> **Screenshot 1** – Status MongoDB 
+
+<img width="1451" height="335" alt="image" src="https://github.com/user-attachments/assets/3f7a3a0e-0495-4075-bf41-0b4b3b298c00" />
+
+---
+
+> **Screenshot 2** – Konfigurasi `bindIp` dan port 27017 
+
+<img width="1177" height="97" alt="image" src="https://github.com/user-attachments/assets/53a6b90e-2e36-46a4-97b7-22bffbfbf356" />
+
+---
+
+### Restore Database
+
+Database direstore menggunakan file dump yang tersedia pada repository.
+
+```bash
+mongorestore --drop ~/fp-tka-26/Resources/DB/dump
+```
+
+Verifikasi:
+
+```javascript
+use orderdb
+
+show collections
+
+db.products.countDocuments()
+db.users.countDocuments()
+db.orders.countDocuments()
+```
+
+**Dokumentasi Restore Database**
+
+> **Screenshot 3** – Hasil restore dan verifikasi database
+
+<img width="482" height="392" alt="image" src="https://github.com/user-attachments/assets/ce0084f5-bd41-4e8c-b07c-c2df7d1c399a" />
+
+---
+
+### Optimasi Database (Indexing)
+
+Untuk meningkatkan performa query pada collection `orders`, dibuat index pada field `created_at`.
+
+```javascript
+db.orders.createIndex({ created_at: -1 })
+db.orders.getIndexes()
+```
+
+**Dokumentasi Hasil Indexing**
+
+> **Screenshot 4** – 
+
+<img width="701" height="142" alt="image" src="https://github.com/user-attachments/assets/bad1ed24-d179-4f2e-90af-b7e2e6baea5a" />
 
 ---
 
@@ -138,12 +185,15 @@ cd ~
 python3 -m venv .venv
 source .venv/bin/activate
 ```
+<img width="818" height="75" alt="image" src="https://github.com/user-attachments/assets/0be7a1ff-3034-4f24-abb3-a9a4d6bbb473" />
+
 
 ### Install Dependency
 
 ```bash
 pip install -r requirements.txt
 ```
+<img width="1906" height="353" alt="image" src="https://github.com/user-attachments/assets/dd9c0fa1-1fe4-45a5-9698-d3e1089abdda" />
 
 ### Set System Variables
 
@@ -151,12 +201,14 @@ pip install -r requirements.txt
 echo 'export MONGO_URI="mongodb://4.240.92.222:27017/orderdb"' >> ~/.bashrc
 echo 'export JWT_SECRET="TK4_FPdul5"' >> ~/.bashrc
 ```
+<img width="1284" height="49" alt="image" src="https://github.com/user-attachments/assets/74821351-e1ea-4230-af5b-f0d328a3c412" />
 
 ### Menjalankan Gunicorn
 
 ```bash
 gunicorn -w 3 -b 0.0.0.0:5000 app:app
 ```
+<img width="1572" height="178" alt="image" src="https://github.com/user-attachments/assets/3bf39166-7524-4e44-b50d-1bbf0b5e4d79" />
 
 ### Konfigurasi Service Daemon (Persistence)
 
@@ -179,6 +231,8 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 ```
+<img width="1241" height="508" alt="image" src="https://github.com/user-attachments/assets/97a76c05-e4a7-48e4-ac92-b9dd2149ea28" />
+
 
 ### Mengaktifkan Autostart Backend
 
@@ -186,14 +240,26 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 sudo systemctl enable --now gunicorn-backend
 ```
+<img width="332" height="613" alt="image" src="https://github.com/user-attachments/assets/7f1097f9-3d7f-48bf-9de9-cff5649b9652" />
 
 ---
 
 ## 3.3 Konfigurasi Firewall
 
-Port 5000 hanya dibuka untuk IP publik VM 1 (Load Balancer).
+Port 5000 pada kedua Backend API hanya mengizinkan koneksi dari VM 1 (Load Balancer) melalui aturan Network Security Group (NSG), sehingga backend tidak dapat diakses langsung dari internet.
 
-> Tambahkan screenshot Network Security Group (NSG)
+> VM 1
+<img width="1553" height="715" alt="image" src="https://github.com/user-attachments/assets/f9393d48-ebf6-4615-97fc-857996148de1" />
+
+> VM 2
+<img width="1080" height="1451" alt="08e9ed74-84bb-493e-b8fd-eef35d55d621" src="https://github.com/user-attachments/assets/178c7e14-aecd-4d59-ae4a-a5bffaa170a6" />
+
+> VM 3
+<img width="1600" height="681" alt="08f06ea8-3fb3-45df-be7f-6568cc0e582a" src="https://github.com/user-attachments/assets/0458d87b-8aed-4b74-b20f-c1fa86e8b1d6" />
+
+> VM 4
+![Uploading image.png…]()
+
 
 ---
 
@@ -289,7 +355,7 @@ File frontend (`index.html` dan `styles.css`) ditempatkan pada direktori:
 /var/www/html/
 ```
 
-Frontend dapat diakses melalui IP publik VM 1.
+Frontend di-host menggunakan Nginx pada VM 1 sehingga dapat diakses melalui IP publik Load Balancer.
 
 ![forntend](./assets/frontend.png)
 ![frontend 2](./assets/frontend2.png)
@@ -358,7 +424,6 @@ curl http://40.81.25.98/products \
 
 ![endpoint3](./assets/endpoint3.png)
 
-
 ---
 
 ## POST /orders
@@ -395,7 +460,7 @@ curl http://40.81.25.98/orders \
 
 **Response:** List seluruh order milik user, diurutkan terbaru.
 
-
+![endpoint5](./assets/endpoint5.png)
 
 ---
 
@@ -408,7 +473,7 @@ curl http://40.81.25.98/orders/6a3c2f9526fa41d4a74a1f42 \
 
 **Response (200):** Detail order berdasarkan order_id.
 
-![endpoint5](./assets/endpoint5.png)
+<img width="449" height="83" alt="Screenshot 2026-06-25 110926" src="https://github.com/user-attachments/assets/ae6fd2a7-b96a-49d7-925a-ccf84c78ed21" />
 
 ---
 
@@ -471,9 +536,9 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | --------------------- | ------- |
 | Users                 | 50      |
 | Spawn Rate            | 5       |
-| RPS Maksimum          | ~38 RPS |
+| RPS Maksimum          | ~37.3 RPS |
 | Failure Rate          | 0% ✅   |
-| Average Response Time | ~250 ms |
+| Average Response Time | ~283 ms |
 
 ![locust1](./assets/locust1.png)
 
@@ -537,7 +602,7 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | Spawn Rate            | 500       |
 | RPS Peak              | ~12,5 RPS |
 | Failure Rate          | 0% ✅     |
-| Average Response Time | ~306 ms   |
+| Average Response Time | ~312 ms   |
 
 ![locust4](./assets/locust5.png)
 
@@ -547,11 +612,11 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 | Skenario        | Users | Spawn Rate | RPS Peak  | Failure Rate | Avg Response Time |
 | --------------- | ----- | ---------- | --------- | ------------ | ----------------- |
-| 1 – Max RPS     | 50    | 5          | ~38 RPS   | 0% ✅        | ~250 ms           |
+| 1 – Max RPS     | 50    | 5          | ~37.3 RPS | 0% ✅        | ~283 ms           |
 | 2 – Peak SR 50  | 100   | 50         | ~74.2 RPS | 0% ✅        | ~855 ms           |
 | 3 – Peak SR 100 | 100   | 100        | ~73.9 RPS | 0% ✅        | ~1095 ms          |
 | 4 – Peak SR 200 | 100   | 200        | ~74.6 RPS | 0% ✅        | ~1108 ms          |
-| 5 – Peak SR 500 | 100   | 500        | ~9.3 RPS  | 0% ✅        | ~306 ms           |
+| 5 – Peak SR 500 | 100   | 500        | ~12.5 RPS | 0% ✅        | ~312 ms           |
 
 ---
 
@@ -565,11 +630,11 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 Berdasarkan hasil pengujian:
 
-- **Load Balancing berjalan efektif** — Nginx dengan strategi `least_conn` berhasil mendistribusikan request ke VM 2 dan VM 3 secara merata sehingga tidak ada satu backend yang kelebihan beban.
-- **RPS stabil di sekitar 74 RPS** pada skenario 2, 3, dan 4 dengan 100 concurrent users — menunjukkan batas kapasitas sistem dengan konfigurasi saat ini.
-- **Skenario 5 (spawn rate 500)** menghasilkan RPS drop ke ~9.3 karena 100 users di-spawn sekaligus dalam waktu sangat singkat (0.2 detik), menyebabkan spike request besar di awal yang membuat server throttling, namun sistem tetap stabil tanpa failure.
-- **Response time meningkat** seiring spawn rate yang lebih tinggi (Skenario 3 & 4 ~1100ms) karena antrian request lebih panjang saat users tiba bersamaan.
-- **Indexing MongoDB** pada field `created_at` dan `order_id` membantu mempercepat query history orders secara signifikan.
+- **Load Balancing berjalan efektif** — Nginx dengan strategi `least_conn` berhasil mendistribusikan request ke VM 2 dan VM 3 secara merata, sehingga beban kerja dapat dibagi ke kedua server backend.
+- **RPS stabil di sekitar 74 RPS** pada skenario 2, 3, dan 4 dengan 100 concurrent users — menunjukkan kapasitas maksimum sistem dengan konfigurasi saat ini.
+- **Skenario 5 (spawn rate 500)** menghasilkan RPS drop ke ~12.5. Hal ini disebabkan seluruh user dibuat hampir bersamaan sehingga terjadi lonjakan request dalam waktu yang sangat singkat. Meskipun demikian, sistem tetap dapat memproses seluruh request tanpa failure.
+- **Response time meningkat** seiring spawn rate yang lebih tinggi (Skenario 3 & 4) karena antrian request lebih panjang saat users tiba bersamaan.
+- **Indexing MongoDB** pada field `created_at` serta `order_id` membantu proses pengambilan data histori pesanan sesuai implementasi yang dilakukan.
 - **Seluruh 100 concurrent users berhasil dilayani tanpa failure** di semua skenario.
 
 ---
@@ -579,18 +644,18 @@ Berdasarkan hasil pengujian:
 ## Kesimpulan
 
 - Sistem Order Processing Service berhasil diimplementasikan pada Microsoft Azure.
-- Nginx berhasil mendistribusikan trafik ke dua backend server.
-- MongoDB berhasil digunakan sebagai database terpusat.
-- Seluruh endpoint berjalan dengan baik.
-- Sistem mampu menangani beban tinggi berdasarkan hasil pengujian Locust.
+- Nginx berhasil berfungsi sebagai load balancer yang mendistribusikan request ke dua backend Flask.
+- Backend API berhasil terhubung dengan MongoDB sebagai database terpusat.
+- Seluruh endpoint aplikasi dapat diakses dan berfungsi sesuai dengan kebutuhan sistem.
+- Berdasarkan hasil pengujian menggunakan Locust, sistem mampu melayani hingga 100 concurrent users pada seluruh skenario tanpa mengalami failure, meskipun terjadi peningkatan response time ketika jumlah request yang masuk secara bersamaan semakin tinggi.
 
 ## Saran
 
 - Menggunakan Azure Load Balancer atau Application Gateway untuk implementasi skala produksi.
 - Menambahkan mekanisme autoscaling pada backend server.
-- Mengimplementasikan Redis sebagai caching layer.
 - Menambahkan monitoring dan logging terpusat.
 - Menggunakan HTTPS dan domain publik untuk meningkatkan keamanan.
+- Melakukan pengujian dengan jumlah concurrent users yang lebih besar dan durasi pengujian yang lebih lama untuk mengetahui batas maksimum performa sistem.
 
 ---
 
