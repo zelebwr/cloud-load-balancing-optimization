@@ -1,0 +1,15 @@
+[Unit]
+Description=Gunicorn instance serving TKA-B2-FP Order Processing API
+After=network.target
+
+[Service]
+User=azureuser
+Group=www-data
+WorkingDirectory=/home/azureuser/
+Environment="MONGO_URI=mongodb://4.240.92.222:27017/orderdb?maxPoolSize=400"
+Environment="JWT_SECRET=TK4_FPdul5"
+ExecStart=/home/azureuser/.venv/bin/gunicorn -w 5 --threads 10 --worker-class gthread -b 0.0.0.0:5000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
