@@ -54,7 +54,7 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 1. User mengakses aplikasi melalui VM 1.
 2. Nginx menerima request dan mendistribusikannya ke Backend API 1 atau Backend API 2 menggunakan strategi `least_conn`.
 3. Backend memproses request.
-4. Backend melakukan komunikasi dengan MongoDB pada VM 4 port 27017.
+4. Backend berkomunikasi dengan MongoDB pada VM 4 melalui port 27017 untuk membaca atau menyimpan data.
 5. Response dikirim kembali ke pengguna.
 
 ## Spesifikasi VM
@@ -82,18 +82,6 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 
 ---
 
-## Estimasi Biaya
-
-| VM    | Biaya/Bulan |
-| ----- | ----------- |
-| VM 1  | $17,96      |
-| VM 2  | $17,96      |
-| VM 3  | $17,96      |
-| VM 4  | $17,96      |
-| Total | $71,84      |
-
----
-
 # 3. Implementasi
 
 ## 3.1 Deploy MongoDB
@@ -107,7 +95,7 @@ sudo apt install mongodb -y
 
 ### Konfigurasi MongoDB
 
-MongoDB dikonfigurasi agar menerima koneksi dari Backend API 1 dan Backend API 2 melalui port 27017.
+MongoDB dikonfigurasi untuk menerima koneksi pada port 27017 dan hanya dapat diakses oleh Backend API 1 dan Backend API 2 melalui aturan Network Security Group (NSG).
 
 ### Pembuatan Index
 
@@ -191,7 +179,8 @@ sudo systemctl enable --now gunicorn-backend
 
 ## 3.3 Konfigurasi Firewall
 
-Port 5000 hanya dibuka untuk IP publik VM 1 (Load Balancer).
+Port 5000 pada kedua Backend API hanya mengizinkan koneksi dari VM 1 (Load Balancer) melalui aturan Network Security Group (NSG), sehingga backend tidak dapat diakses langsung dari internet.
+
 > VM 1
 
 > VM 2
@@ -294,7 +283,7 @@ File frontend (`index.html` dan `styles.css`) ditempatkan pada direktori:
 /var/www/html/
 ```
 
-Frontend dapat diakses melalui IP publik VM 1.
+Frontend di-host menggunakan Nginx pada VM 1 sehingga dapat diakses melalui IP publik Load Balancer.
 
 ![forntend](./assets/frontend.png)
 ![frontend 2](./assets/frontend2.png)
@@ -475,9 +464,9 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | --------------------- | ------- |
 | Users                 | 50      |
 | Spawn Rate            | 5       |
-| RPS Maksimum          | ~38 RPS |
+| RPS Maksimum          | ~37.3 RPS |
 | Failure Rate          | 0% ✅   |
-| Average Response Time | ~250 ms |
+| Average Response Time | ~283 ms |
 
 ![locust1](./assets/locust1.png)
 
@@ -541,7 +530,7 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 | Spawn Rate            | 500       |
 | RPS Peak              | ~12,5 RPS |
 | Failure Rate          | 0% ✅     |
-| Average Response Time | ~306 ms   |
+| Average Response Time | ~312 ms   |
 
 ![locust4](./assets/locust5.png)
 
@@ -551,11 +540,11 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 | Skenario        | Users | Spawn Rate | RPS Peak  | Failure Rate | Avg Response Time |
 | --------------- | ----- | ---------- | --------- | ------------ | ----------------- |
-| 1 – Max RPS     | 50    | 5          | ~38 RPS   | 0% ✅        | ~250 ms           |
+| 1 – Max RPS     | 50    | 5          | ~37.3 RPS | 0% ✅        | ~283 ms           |
 | 2 – Peak SR 50  | 100   | 50         | ~74.2 RPS | 0% ✅        | ~855 ms           |
 | 3 – Peak SR 100 | 100   | 100        | ~73.9 RPS | 0% ✅        | ~1095 ms          |
 | 4 – Peak SR 200 | 100   | 200        | ~74.6 RPS | 0% ✅        | ~1108 ms          |
-| 5 – Peak SR 500 | 100   | 500        | ~9.3 RPS  | 0% ✅        | ~306 ms           |
+| 5 – Peak SR 500 | 100   | 500        | ~12.5 RPS | 0% ✅        | ~312 ms           |
 
 ---
 
@@ -569,11 +558,11 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 Berdasarkan hasil pengujian:
 
-- **Load Balancing berjalan efektif** — Nginx dengan strategi `least_conn` berhasil mendistribusikan request ke VM 2 dan VM 3 secara merata sehingga tidak ada satu backend yang kelebihan beban.
-- **RPS stabil di sekitar 74 RPS** pada skenario 2, 3, dan 4 dengan 100 concurrent users — menunjukkan batas kapasitas sistem dengan konfigurasi saat ini.
-- **Skenario 5 (spawn rate 500)** menghasilkan RPS drop ke ~9.3 karena 100 users di-spawn sekaligus dalam waktu sangat singkat (0.2 detik), menyebabkan spike request besar di awal yang membuat server throttling, namun sistem tetap stabil tanpa failure.
-- **Response time meningkat** seiring spawn rate yang lebih tinggi (Skenario 3 & 4 ~1100ms) karena antrian request lebih panjang saat users tiba bersamaan.
-- **Indexing MongoDB** pada field `created_at` dan `order_id` membantu mempercepat query history orders secara signifikan.
+- **Load Balancing berjalan efektif** — Nginx dengan strategi `least_conn` berhasil mendistribusikan request ke VM 2 dan VM 3 secara merata, sehingga beban kerja dapat dibagi ke kedua server backend.
+- **RPS stabil di sekitar 74 RPS** pada skenario 2, 3, dan 4 dengan 100 concurrent users — menunjukkan kapasitas maksimum sistem dengan konfigurasi saat ini.
+- **Skenario 5 (spawn rate 500)** menghasilkan RPS drop ke ~12.5. Hal ini disebabkan seluruh user dibuat hampir bersamaan sehingga terjadi lonjakan request dalam waktu yang sangat singkat. Meskipun demikian, sistem tetap dapat memproses seluruh request tanpa failure.
+- **Response time meningkat** seiring spawn rate yang lebih tinggi (Skenario 3 & 4) karena antrian request lebih panjang saat users tiba bersamaan.
+- **Indexing MongoDB** pada field `created_at` serta `order_id` membantu proses pengambilan data histori pesanan sesuai implementasi yang dilakukan.
 - **Seluruh 100 concurrent users berhasil dilayani tanpa failure** di semua skenario.
 
 ---
@@ -583,18 +572,18 @@ Berdasarkan hasil pengujian:
 ## Kesimpulan
 
 - Sistem Order Processing Service berhasil diimplementasikan pada Microsoft Azure.
-- Nginx berhasil mendistribusikan trafik ke dua backend server.
-- MongoDB berhasil digunakan sebagai database terpusat.
-- Seluruh endpoint berjalan dengan baik.
-- Sistem mampu menangani beban tinggi berdasarkan hasil pengujian Locust.
+- Nginx berhasil berfungsi sebagai load balancer yang mendistribusikan request ke dua backend Flask.
+- Backend API berhasil terhubung dengan MongoDB sebagai database terpusat.
+- Seluruh endpoint aplikasi dapat diakses dan berfungsi sesuai dengan kebutuhan sistem.
+- Berdasarkan hasil pengujian menggunakan Locust, sistem mampu melayani hingga 100 concurrent users pada seluruh skenario tanpa mengalami failure, meskipun terjadi peningkatan response time ketika jumlah request yang masuk secara bersamaan semakin tinggi.
 
 ## Saran
 
 - Menggunakan Azure Load Balancer atau Application Gateway untuk implementasi skala produksi.
 - Menambahkan mekanisme autoscaling pada backend server.
-- Mengimplementasikan Redis sebagai caching layer.
 - Menambahkan monitoring dan logging terpusat.
 - Menggunakan HTTPS dan domain publik untuk meningkatkan keamanan.
+- Melakukan pengujian dengan jumlah concurrent users yang lebih besar dan durasi pengujian yang lebih lama untuk mengetahui batas maksimum performa sistem.
 
 ---
 
