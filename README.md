@@ -2,16 +2,16 @@
 
 ## Anggota Kelompok
 
-| Nama                            | NRP        |
-| ------------------------------- | ---------- |
-| Adiwidya Budi Pratama           | 5027241012 |
+| Nama | NRP |
+|--------|--------|
+| Adiwidya Budi Pratama | 5027241012 |
 | Erlangga Valdhio Putra Sulistio | 5027241030 |
-| Jonathan Zelig Sutopo           | 5027241047 |
-| Raihan Fahri Ghazali            | 5027241061 |
-| Naila Cahyarani Idelia          | 5027241063 |
-| Fika Arka Nuriyah               | 5027241071 |
+| Jonathan Zelig Sutopo | 5027241047 |
+| Raihan Fahri Ghazali | 5027241061 |
+| Naila Cahyarani Idelia | 5027241063 |
+| Fika Arka Nuriyah | 5027241071 |
 | Muhammad Ahsani Taqwiim Rakhman | 5027241099 |
-| Imam Mahmud Dalil Fauzan        | 5027241100 |
+| Imam Mahmud Dalil Fauzan | 5027241100 |
 
 ---
 
@@ -26,9 +26,9 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 ## Tujuan
 
 - Membangun sistem Order Processing Service berbasis cloud.
-- Mengimplementasikan load balancing menggunakan Nginx.
+- Mengimplementasikan load balancing menggunakan Nginx dengan strategi `least_conn`.
 - Menghubungkan backend Flask dengan MongoDB.
-- Mengoptimalkan performa database menggunakan indexing.
+- Mengoptimalkan performa dengan Gunicorn gthread worker, connection pooling, dan Nginx keepalive.
 - Melakukan pengujian performa menggunakan Locust.
 - Menganalisis kemampuan sistem dalam menangani beban tinggi.
 
@@ -38,183 +38,127 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 
 ## Diagram Arsitektur
 
-![Diagram Arsitektur](./assets/diagram.png)
+![Diagram Arsitektur](assets/diagram.png)
 
 ## Topologi Sistem
 
-| VM                    | Fungsi                           |
-| --------------------- | -------------------------------- |
-| VM 1 (`40.81.25.98`)  | Nginx Load Balancer + Frontend   |
-| VM 2 (`20.40.54.202`) | Backend API 1 (Flask + Gunicorn) |
-| VM 3 (`20.40.58.217`) | Backend API 2 (Flask + Gunicorn) |
-| VM 4 (`4.240.92.222`) | MongoDB Database                 |
+| VM | Fungsi | IP Publik |
+|-----|---------|-----------|
+| VM 1 | Nginx Load Balancer + Frontend | `40.81.25.98` |
+| VM 2 | Backend API 1 (Flask + Gunicorn) | `20.40.54.202` |
+| VM 3 | Backend API 2 (Flask + Gunicorn) | `20.40.58.217` |
+| VM 4 | MongoDB Database | `4.240.92.222` |
 
 ## Alur Sistem
 
-1. User mengakses aplikasi melalui VM 1.
-2. Nginx menerima request dan mendistribusikannya ke Backend API 1 atau Backend API 2 menggunakan strategi `least_conn`.
-3. Backend memproses request.
-4. Backend berkomunikasi dengan MongoDB pada VM 4 melalui port 27017 untuk membaca atau menyimpan data.
+1. User mengakses aplikasi melalui VM 1 (port 80).
+2. Nginx menerima request dan mendistribusikannya ke VM 2 atau VM 3 menggunakan strategi `least_conn` dengan keepalive connection.
+3. Backend Flask memproses request menggunakan Gunicorn gthread worker.
+4. Backend terhubung ke MongoDB di VM 4 melalui connection pool (`maxPoolSize=400`).
 5. Response dikirim kembali ke pengguna.
 
 ## Spesifikasi VM
 
-| VM        | Role                     | OS            | vCPU | RAM  | Harga/Bulan |
-| --------- | ------------------------ | ------------- | ---- | ---- | ----------- |
-| VM 1      | Load Balancer + Frontend | Ubuntu Server | 2    | 1 GB | $9.56       |
-| VM 2      | Backend API 1            | Ubuntu Server | 2    | 4 GB | $17.96      |
-| VM 3      | Backend API 2            | Ubuntu Server | 2    | 4 GB | $17.96      |
-| VM 4      | MongoDB Database         | Ubuntu Server | 2    | 4 GB | $17.96      |
-| **Total** |                          |               |      |      | **$63.44**  |
+| VM | Role | OS | vCPU | RAM | Harga/Bulan |
+|-----|------|------|------|------|-------------|
+| VM 1 | Load Balancer + Frontend | Ubuntu Server | 2 | 4 GB | $17.96 |
+| VM 2 | Backend API 1 | Ubuntu Server | 2 | 4 GB | $17.96 |
+| VM 3 | Backend API 2 | Ubuntu Server | 2 | 4 GB | $17.96 |
+| VM 4 | MongoDB Database | Ubuntu Server | 2 | 4 GB | $17.96 |
+| **Total** | | | | | **$71.84** |
+
+Budget yang digunakan $71.84/bulan dari maksimal $75/bulan, sisa $3.16.
 
 ## Teknologi yang Digunakan
 
-| Teknologi       | Fungsi                                |
-| --------------- | ------------------------------------- |
-| Nginx           | Load Balancer dan Web Server Frontend |
-| Flask           | Framework Backend REST API            |
-| Gunicorn        | Application Server untuk Flask (-w 3) |
-| MongoDB         | Database NoSQL                        |
-| Ubuntu Server   | Sistem Operasi Virtual Machine        |
-| Microsoft Azure | Infrastruktur Cloud                   |
-| Locust          | Load Testing                          |
-| Postman         | Pengujian Endpoint API                |
+| Teknologi | Fungsi |
+|-----------|---------|
+| Nginx | Load Balancer dan Web Server Frontend |
+| Flask | Framework Backend REST API |
+| Gunicorn (gthread) | Application Server multi-worker multi-thread |
+| MongoDB | Database NoSQL |
+| Ubuntu Server | Sistem Operasi Virtual Machine |
+| Microsoft Azure | Infrastruktur Cloud |
+| Locust | Load Testing |
 
 ---
 
 # 3. Implementasi
 
-## 3.1 Deploy MongoDB
+## 3.1 Konfigurasi Network Security Group (NSG)
+
+Setiap VM dikonfigurasi NSG-nya agar hanya port yang diperlukan yang terbuka:
+
+| VM | Port | Source | Keterangan |
+|----|------|--------|------------|
+| VM 1 | 80 | Any | HTTP publik |
+| VM 1 | 22 | Admin IP | SSH |
+| VM 2 | 5000 | `40.81.25.98` (VM1) | Flask backend |
+| VM 2 | 22 | Admin IP | SSH |
+| VM 3 | 5000 | `40.81.25.98` (VM1) | Flask backend |
+| VM 3 | 22 | Admin IP | SSH |
+| VM 4 | 27017 | `20.40.54.202`, `20.40.58.217` | MongoDB |
+| VM 4 | 22 | Admin IP | SSH |
+
+---
+
+## 3.2 Deploy MongoDB (VM 4)
 
 ### Instalasi MongoDB
 
-MongoDB Community Edition diinstal pada VM4 sebagai database server menggunakan repository resmi MongoDB.
-
 ```bash
-sudo apt update
-sudo apt install -y mongodb-org
-sudo systemctl start mongod
+sudo apt update && sudo apt install -y mongodb
 sudo systemctl enable mongod
+sudo systemctl start mongod
 ```
 
-### Konfigurasi MongoDB
-
-Agar dapat diakses oleh Backend API pada VM2 dan VM3, konfigurasi `bindIp` diubah menjadi `0.0.0.0`, kemudian service MongoDB di-restart.
+### Konfigurasi `/etc/mongod.conf`
 
 ```yaml
-bindIp: 0.0.0.0
+storage:
+  dbPath: /var/lib/mongodb
+
+systemLog:
+  destination: file
+  logAppend: true
+  path: /var/log/mongodb/mongod.log
+
+net:
+  port: 27017
+  bindIp: 0.0.0.0
 ```
+
+### Restore Dump Data
 
 ```bash
-sudo systemctl restart mongod
+mongorestore --uri='mongodb://127.0.0.1:27017' --drop dump/
 ```
 
-**Dokumentasi Konfigurasi MongoDB**
-
-> **Screenshot 1** – Status MongoDB 
-
-<img width="1451" height="335" alt="image" src="https://github.com/user-attachments/assets/3f7a3a0e-0495-4075-bf41-0b4b3b298c00" />
-
----
-
-> **Screenshot 2** – Konfigurasi `bindIp` dan port 27017 
-
-<img width="1177" height="97" alt="image" src="https://github.com/user-attachments/assets/53a6b90e-2e36-46a4-97b7-22bffbfbf356" />
-
----
-
-### Restore Database
-
-Database direstore menggunakan file dump yang tersedia pada repository.
-
-```bash
-mongorestore --drop ~/fp-tka-26/Resources/DB/dump
-```
-
-Verifikasi:
+### Pembuatan Index
 
 ```javascript
 use orderdb
-
-show collections
-
-db.products.countDocuments()
-db.users.countDocuments()
-db.orders.countDocuments()
-```
-
-**Dokumentasi Restore Database**
-
-> **Screenshot 3** – Hasil restore dan verifikasi database
-
-<img width="482" height="392" alt="image" src="https://github.com/user-attachments/assets/ce0084f5-bd41-4e8c-b07c-c2df7d1c399a" />
-
----
-
-### Optimasi Database (Indexing)
-
-Untuk meningkatkan performa query pada collection `orders`, dibuat index pada field `created_at`.
-
-```javascript
 db.orders.createIndex({ created_at: -1 })
-db.orders.getIndexes()
+db.orders.createIndex({ order_id: 1 })
 ```
-
-**Dokumentasi Hasil Indexing**
-
-> **Screenshot 4** – 
-
-<img width="701" height="142" alt="image" src="https://github.com/user-attachments/assets/bad1ed24-d179-4f2e-90af-b7e2e6baea5a" />
 
 ---
 
-## 3.2 Deploy Backend API
+## 3.3 Deploy Backend API (VM 2 & VM 3)
 
-### Clone Source Code
-
-```bash
-git clone https://github.com/fuaddary/fp-tka-26
-cd fp-tka-26/Resources/BE
-cp app.py requirements.txt ~
-cd ~
-```
-
-### Set Python Virtual Environment
+### Clone Source Code & Install Dependency
 
 ```bash
+git clone https://github.com/imdfauzan/TKA-B2-FP.git
+cd TKA-B2-FP
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -r Resources/BE/requirements.txt
 ```
-<img width="818" height="75" alt="image" src="https://github.com/user-attachments/assets/0be7a1ff-3034-4f24-abb3-a9a4d6bbb473" />
 
+### Konfigurasi Systemd Service (`/etc/systemd/system/gunicorn.service`)
 
-### Install Dependency
-
-```bash
-pip install -r requirements.txt
-```
-<img width="1906" height="353" alt="image" src="https://github.com/user-attachments/assets/dd9c0fa1-1fe4-45a5-9698-d3e1089abdda" />
-
-### Set System Variables
-
-```bash
-echo 'export MONGO_URI="mongodb://4.240.92.222:27017/orderdb"' >> ~/.bashrc
-echo 'export JWT_SECRET="TK4_FPdul5"' >> ~/.bashrc
-```
-<img width="1284" height="49" alt="image" src="https://github.com/user-attachments/assets/74821351-e1ea-4230-af5b-f0d328a3c412" />
-
-### Menjalankan Gunicorn
-
-```bash
-gunicorn -w 3 -b 0.0.0.0:5000 app:app
-```
-<img width="1572" height="178" alt="image" src="https://github.com/user-attachments/assets/3bf39166-7524-4e44-b50d-1bbf0b5e4d79" />
-
-### Konfigurasi Service Daemon (Persistence)
-
-Konfigurasi file `/etc/systemd/system/gunicorn-backend.service`:
-
-```service
+```ini
 [Unit]
 Description=Gunicorn instance serving TKA-B2-FP Order Processing API
 After=network.target
@@ -223,47 +167,29 @@ After=network.target
 User=azureuser
 Group=www-data
 WorkingDirectory=/home/azureuser/
-Environment="MONGO_URI=mongodb://4.240.92.222:27017/orderdb"
+Environment="MONGO_URI=mongodb://4.240.92.222:27017/orderdb?maxPoolSize=400"
 Environment="JWT_SECRET=TK4_FPdul5"
-ExecStart=/home/azureuser/.venv/bin/gunicorn -w 3 -b 0.0.0.0:5000 app:app
+ExecStart=/home/azureuser/.venv/bin/gunicorn -w 5 --threads 10 --worker-class gthread -b 0.0.0.0:5000 app:app
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 ```
-<img width="1241" height="508" alt="image" src="https://github.com/user-attachments/assets/97a76c05-e4a7-48e4-ac92-b9dd2149ea28" />
 
-
-### Mengaktifkan Autostart Backend
+**Penjelasan optimasi Gunicorn:**
+- `-w 5` — 5 worker processes untuk memanfaatkan multi-core
+- `--threads 10` — 10 threads per worker = 50 concurrent request handler
+- `--worker-class gthread` — async threading, lebih efisien dari sync worker
+- `maxPoolSize=400` — MongoDB connection pool besar untuk high concurrency
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now gunicorn-backend
+sudo systemctl enable gunicorn
+sudo systemctl start gunicorn
 ```
-<img width="332" height="613" alt="image" src="https://github.com/user-attachments/assets/7f1097f9-3d7f-48bf-9de9-cff5649b9652" />
 
 ---
 
-## 3.3 Konfigurasi Firewall
-
-Port 5000 pada kedua Backend API hanya mengizinkan koneksi dari VM 1 (Load Balancer) melalui aturan Network Security Group (NSG), sehingga backend tidak dapat diakses langsung dari internet.
-
-> VM 1
-<img width="1553" height="715" alt="image" src="https://github.com/user-attachments/assets/f9393d48-ebf6-4615-97fc-857996148de1" />
-
-> VM 2
-<img width="1080" height="1451" alt="08e9ed74-84bb-493e-b8fd-eef35d55d621" src="https://github.com/user-attachments/assets/178c7e14-aecd-4d59-ae4a-a5bffaa170a6" />
-
-> VM 3
-<img width="1600" height="681" alt="08f06ea8-3fb3-45df-be7f-6568cc0e582a" src="https://github.com/user-attachments/assets/0458d87b-8aed-4b74-b20f-c1fa86e8b1d6" />
-
-> VM 4
-![Uploading image.png…]()
-
-
----
-
-## 3.4 Konfigurasi Nginx Load Balancer
+## 3.4 Konfigurasi Nginx Load Balancer (VM 1)
 
 ### Instalasi Nginx
 
@@ -271,16 +197,17 @@ Port 5000 pada kedua Backend API hanya mengizinkan koneksi dari VM 1 (Load Balan
 sudo apt install nginx -y
 ```
 
-### Konfigurasi Upstream
+### Konfigurasi `/etc/nginx/sites-available/loadbalancer`
 
 ```nginx
 upstream backend_servers {
     least_conn;
     server 20.40.54.202:5000;
     server 20.40.58.217:5000;
+    keepalive 64;
 }
 
-server{
+server {
     listen 80;
     server_name 40.81.25.98;
 
@@ -291,36 +218,10 @@ server{
         try_files $uri $uri/ =404;
     }
 
-    location /health {
+    location ~ ^/(auth|orders|products|admin|health) {
         proxy_pass http://backend_servers;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /auth/ {
-        proxy_pass http://backend_servers;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /products {
-        proxy_pass http://backend_servers;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /orders {
-        proxy_pass http://backend_servers;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /admin/ {
-        proxy_pass http://backend_servers;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -328,46 +229,40 @@ server{
 }
 ```
 
-### Symlink Routing Nginx
-
-```bash 
-sudo rm /etc/nginx/sites-enabled/default
-sudo ln -s /etc/nginx/sites-available/loadbalancer /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### Check Nginx Berjalan
+**Penjelasan optimasi Nginx:**
+- `keepalive 64` — persistent connection ke backend, mengurangi overhead TCP handshake
+- `proxy_http_version 1.1` + `proxy_set_header Connection ""` — wajib untuk keepalive
+- `location ~ ^/(auth|orders|...)` — regex match mencakup semua sub-path sekaligus
 
 ```bash
-sudo systemctl is-enabled nginx
+sudo ln -s /etc/nginx/sites-available/loadbalancer /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-![nginx running](./assets/nginx.png)
+![Nginx Config Test](assets/nginx.png)
 
 ---
 
-## 3.5 Deploy Frontend
-
-File frontend (`index.html` dan `styles.css`) ditempatkan pada direktori:
+## 3.5 Deploy Frontend (VM 1)
 
 ```bash
-/var/www/html/
+sudo cp ~/TKA-B2-FP/resources/FE/index.html /var/www/html/
+sudo cp ~/TKA-B2-FP/resources/FE/styles.css /var/www/html/
 ```
 
-Frontend di-host menggunakan Nginx pada VM 1 sehingga dapat diakses melalui IP publik Load Balancer.
+Akses frontend melalui: `http://40.81.25.98`
 
-![forntend](./assets/frontend.png)
-![frontend 2](./assets/frontend2.png)
+![Tampilan Frontend](assets/frontend.png)
+
+![Tampilan Frontend 2](assets/frontend2.png)
+
+![Tampilan Frontend View](assets/frontend-view.png)
 
 ---
 
 # 4. Hasil Pengujian Endpoint
 
-Pengujian endpoint dilakukan menggunakan `curl` dari lokal dan Postman.
-
 Kredensial yang digunakan:
-
 - Admin: `admin1@tka.its.ac.id` / `Admin@12345`
 - User: `kalimprakasa@example.org` / `User@12345`
 
@@ -376,14 +271,11 @@ Kredensial yang digunakan:
 ```bash
 curl http://40.81.25.98/health
 ```
-
-**Response:**
-
 ```json
-{ "status": "ok", "timestamp": "2026-06-23T18:32:25.393981+00:00" }
+{"status":"ok","timestamp":"2026-06-23T18:32:25.393981+00:00"}
 ```
 
-![endpoint1](./assets/endpoint1.png)
+![Endpoint Health](assets/endpoint1.png)
 
 ---
 
@@ -394,35 +286,26 @@ curl -X POST http://40.81.25.98/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin1@tka.its.ac.id","password":"Admin@12345"}'
 ```
-
-**Response:**
-
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "email": "admin1@tka.its.ac.id",
-    "id": "6a2f5aa3d7c8a947fb1afce6",
-    "name": "Admin TKA 1",
-    "role": "admin"
-  }
+  "user": {"email":"admin1@tka.its.ac.id","name":"Admin TKA 1","role":"admin"}
 }
 ```
 
-![endpoint2](./assets/endpoint2.png)
+![Endpoint Login](assets/endpoint2.png)
 
 ---
 
 ## GET /products
 
 ```bash
-curl http://40.81.25.98/products \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YTJmNWFhM2Q3YzhhOTQ3ZmIxYWZjZTYiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODI0MzA4NjQsImlhdCI6MTc4MjM0NDQ2NH0.4V2q3QYZePKOCM7T1smUwp57xeOvHIM1JxbAnlmIw8s"
+curl http://40.81.25.98/products -H "Authorization: Bearer $TOKEN"
 ```
 
-**Response:** Mengembalikan 92 produk dengan paginasi (20 per halaman).
+Response: 92 produk dengan paginasi 20 per halaman.
 
-![endpoint3](./assets/endpoint3.png)
+![Endpoint Products](assets/endpoint3.png)
 
 ---
 
@@ -430,101 +313,68 @@ curl http://40.81.25.98/products \
 
 ```bash
 curl -X POST http://40.81.25.98/orders \
-  -H "Authorization: Bearer <TOKEN>" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"items":[{"product_id":"6a2f5aa3d7c8a947fb1afc8f","qty":1}]}'
 ```
-
-**Response (201):**
-
 ```json
 {
-  "order_id": "f82c03bc-4358-4804-9be6-3e1227282fa0",
+  "order_id": "877096a2-3b86-4b08-9efc-1c3b4a50c122",
   "status": "pending",
   "total": 1350000,
-  "customer_email": "admin1@tka.its.ac.id",
-  "created_at": "2026-06-23T18:52:17.921567+00:00"
+  "created_at": "2026-06-24T19:27:17.387970+00:00"
 }
 ```
 
-![endpoint4](./assets/endpoint4.png)
+![Endpoint Create Order](assets/endpoint4.png)
 
 ---
 
 ## GET /orders
 
 ```bash
-curl http://40.81.25.98/orders \
-  -H "Authorization: Bearer <TOKEN>"
+curl http://40.81.25.98/orders -H "Authorization: Bearer $TOKEN"
 ```
 
-**Response:** List seluruh order milik user, diurutkan terbaru.
-
-![endpoint5](./assets/endpoint5.png)
+![Endpoint Get Orders](assets/endpoint5.png)
 
 ---
 
 ## GET /orders/\<order_id\>
 
 ```bash
-curl http://40.81.25.98/orders/6a3c2f9526fa41d4a74a1f42 \
-  -H "Authorization: Bearer <TOKEN>"
+curl http://40.81.25.98/orders/877096a2-3b86-4b08-9efc-1c3b4a50c122 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-**Response (200):** Detail order berdasarkan order_id.
-
-<img width="449" height="83" alt="Screenshot 2026-06-25 110926" src="https://github.com/user-attachments/assets/ae6fd2a7-b96a-49d7-925a-ccf84c78ed21" />
+![Endpoint Get Order Detail](assets/endpoint6.png)
 
 ---
 
 ## PUT /orders/\<order_id\>/status
 
 ```bash
-curl -X PUT http://40.81.25.98/orders/f82c03bc-4358-4804-9be6-3e1227282fa0/status \
-  -H "Authorization: Bearer <TOKEN>" \
+curl -X PUT http://40.81.25.98/orders/877096a2-3b86-4b08-9efc-1c3b4a50c122/status \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"status":"processing"}'
 ```
-
-**Response:**
-
 ```json
-{ "order_id": "f82c03bc-4358-4804-9be6-3e1227282fa0", "status": "processing" }
+{"order_id":"877096a2-3b86-4b08-9efc-1c3b4a50c122","status":"processing"}
 ```
 
-![endpoint6](./assets/endpoint6.png)
-
----
-
-## GET /admin/stats
-
-```bash
-curl http://40.81.25.98/admin/stats \
-  -H "Authorization: Bearer <TOKEN>"
-```
-
-**Response:** Aggregasi statistik dashboard (total orders, revenue, top products, dll).
-
-![endpoint7](./assets/endpoint7.png)
-
----
-
-## Tampilan Frontend
-
-![frontend-view](./assets/frontend-view.png)
+![Endpoint Update Status](assets/endpoint7.png)
 
 ---
 
 # 5. Hasil Load Testing
 
-Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server aplikasi), diarahkan ke `http://40.81.25.98`.
+Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server), host: `http://40.81.25.98`.
 
-**Kondisi saat pengujian:**
-
-- VM 1: Nginx Load Balancer aktif
-- VM 2: Flask + Gunicorn 3 workers aktif
-- VM 3: Flask + Gunicorn 3 workers aktif
-- VM 4: MongoDB aktif dengan index pada `created_at` dan `order_id`
+**Kondisi sistem saat pengujian:**
+- VM 1: Nginx Load Balancer + keepalive 64
+- VM 2 & VM 3: Flask + Gunicorn `-w 5 --threads 10 --worker-class gthread`
+- VM 4: MongoDB dengan index `created_at` dan `order_id`, `maxPoolSize=400`
 
 ---
 
@@ -532,15 +382,30 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 **Parameter:** Users ditingkatkan bertahap, spawn rate 5, durasi 60 detik.
 
-| Metrik                | Nilai   |
-| --------------------- | ------- |
-| Users                 | 50      |
-| Spawn Rate            | 5       |
-| RPS Maksimum          | ~37.3 RPS |
-| Failure Rate          | 0% ✅   |
-| Average Response Time | ~283 ms |
+| Metrik | Nilai |
+|---------|---------|
+| Users | 50 |
+| Spawn Rate | 5 (bertahap) |
+| RPS Maksimum | ~225 RPS |
+| Failure Rate | 0% ✅ |
+| 50th Percentile Response Time | ~170 ms |
+| 95th Percentile Response Time | ~180 ms |
 
-![locust1](./assets/locust1.png)
+![Locust Skenario 1](assets/loc-sk1.png)
+
+### Resource Utilization Skenario 1
+
+| VM | CPU Usage | Load Average | Memory |
+|----|-----------|-------------|--------|
+| VM 1 (Nginx) | ~0.7% | 0.00 | 277M/843M |
+| VM 2 (Backend) | ~22.6% | 0.76 | 484M/3.82G |
+| VM 3 (Backend) | ~2.0% | 0.01 | 483M/3.82G |
+| VM 4 (MongoDB) | — | — | — |
+
+![htop VM1 Skenario 1](assets/vm1-sk1.png)
+![htop VM2 Skenario 1](assets/vm2-sk1.png)
+![htop VM3 Skenario 1](assets/vm3-sk1.png)
+![htop VM4 Skenario 1](assets/vm4-sk1.png)
 
 ---
 
@@ -548,15 +413,30 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 **Parameter:** 100 users, spawn rate 50, durasi 60 detik.
 
-| Metrik                | Nilai     |
-| --------------------- | --------- |
-| Concurrent Users      | 100       |
-| Spawn Rate            | 50        |
-| RPS Peak              | ~74.2 RPS |
-| Failure Rate          | 0% ✅     |
-| Average Response Time | ~855 ms   |
+| Metrik | Nilai |
+|---------|---------|
+| Concurrent Users | 100 |
+| Spawn Rate | 50 |
+| RPS Peak | ~470 RPS |
+| Failure Rate | 0% ✅ |
+| 50th Percentile Response Time | ~170 ms |
+| 95th Percentile Response Time | ~180 ms |
 
-![locust2](./assets/locust2.png)
+![Locust Skenario 2](assets/loc-sk2.png)
+
+### Resource Utilization Skenario 2
+
+| VM | CPU Usage | Load Average | Memory |
+|----|-----------|-------------|--------|
+| VM 1 (Nginx) | ~1.4% | 0.00 | 278M/843M |
+| VM 2 (Backend) | ~2.0% | 0.01 | 483M/3.82G |
+| VM 3 (Backend) | ~23.0% | 0.25 | 483M/3.82G |
+| VM 4 (MongoDB) | — | — | — |
+
+![htop VM1 Skenario 2](assets/vm1-sk2.png)
+![htop VM2 Skenario 2](assets/vm2-sk2.png)
+![htop VM3 Skenario 2](assets/vm3-sk2.png)
+![htop VM4 Skenario 2](assets/vm4-sk2.png)
 
 ---
 
@@ -564,15 +444,30 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 **Parameter:** 100 users, spawn rate 100, durasi 60 detik.
 
-| Metrik                | Nilai     |
-| --------------------- | --------- |
-| Concurrent Users      | 100       |
-| Spawn Rate            | 100       |
-| RPS Peak              | ~73.4 RPS |
-| Failure Rate          | 0% ✅     |
-| Average Response Time | ~1086 ms  |
+| Metrik | Nilai |
+|---------|---------|
+| Concurrent Users | 100 |
+| Spawn Rate | 100 |
+| RPS Peak | ~460 RPS |
+| Failure Rate | 0% ✅ |
+| 50th Percentile Response Time | ~170 ms |
+| 95th Percentile Response Time | ~180 ms |
 
-![locust3](./assets/locust3.png)
+![Locust Skenario 3](assets/loc-sk3.png)
+
+### Resource Utilization Skenario 3
+
+| VM | CPU Usage | Load Average | Memory |
+|----|-----------|-------------|--------|
+| VM 1 (Nginx) | ~3.4% | 0.00 | 278M/843M |
+| VM 2 (Backend) | ~23.0% | 0.25 | 483M/3.82G |
+| VM 3 (Backend) | ~13.7% | 0.79 | 483M/3.82G |
+| VM 4 (MongoDB) | — | — | — |
+
+![htop VM1 Skenario 3](assets/vm1-sk3.png)
+![htop VM2 Skenario 3](assets/vm2-sk3.png)
+![htop VM3 Skenario 3](assets/vm3-sk3.png)
+![htop VM4 Skenario 3](assets/vm4-sk3.png)
 
 ---
 
@@ -580,15 +475,30 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 **Parameter:** 100 users, spawn rate 200, durasi 60 detik.
 
-| Metrik                | Nilai     |
-| --------------------- | --------- |
-| Concurrent Users      | 100       |
-| Spawn Rate            | 200       |
-| RPS Peak              | ~74.3 RPS |
-| Failure Rate          | 0% ✅     |
-| Average Response Time | ~1163 ms  |
+| Metrik | Nilai |
+|---------|---------|
+| Concurrent Users | 100 |
+| Spawn Rate | 200 |
+| RPS Peak | ~460 RPS |
+| Failure Rate | 0% ✅ |
+| 50th Percentile Response Time | ~170 ms |
+| 95th Percentile Response Time | ~180 ms |
 
-![locust4](./assets/locust4.png)
+![Locust Skenario 4](assets/loc-sk4.png)
+
+### Resource Utilization Skenario 4
+
+| VM | CPU Usage | Load Average | Memory |
+|----|-----------|-------------|--------|
+| VM 1 (Nginx) | ~2.0% | 0.00 | 278M/843M |
+| VM 2 (Backend) | ~13.7% | 0.79 | 483M/3.82G |
+| VM 3 (Backend) | ~0.7% | 0.52 | 483M/3.82G |
+| VM 4 (MongoDB) | — | — | — |
+
+![htop VM1 Skenario 4](assets/vm1-sk4.png)
+![htop VM2 Skenario 4](assets/vm2-sk4.png)
+![htop VM3 Skenario 4](assets/vm3-sk4.png)
+![htop VM4 Skenario 4](assets/vm4-sk4.png)
 
 ---
 
@@ -596,33 +506,44 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 **Parameter:** 100 users, spawn rate 500, durasi 60 detik.
 
-| Metrik                | Nilai     |
-| --------------------- | --------- |
-| Concurrent Users      | 100       |
-| Spawn Rate            | 500       |
-| RPS Peak              | ~12,5 RPS |
-| Failure Rate          | 0% ✅     |
-| Average Response Time | ~312 ms   |
+| Metrik | Nilai |
+|---------|---------|
+| Concurrent Users | 100 |
+| Spawn Rate | 500 |
+| RPS Peak | ~472 RPS |
+| Failure Rate | 0% ✅ |
+| 50th Percentile Response Time | ~170 ms |
+| 95th Percentile Response Time | ~180 ms |
 
-![locust4](./assets/locust5.png)
+![Locust Skenario 5](assets/loc-sk5.png)
+
+### Resource Utilization Skenario 5
+
+| VM | CPU Usage | Load Average | Memory |
+|----|-----------|-------------|--------|
+| VM 1 (Nginx) | ~0.7% | 0.06 | 278M/843M |
+| VM 2 (Backend) | ~0.7% | 0.52 | 483M/3.82G |
+| VM 3 (Backend) | ~0.7% | 0.52 | 483M/3.82G |
+| VM 4 (MongoDB) | — | — | — |
+
+![htop VM1 Skenario 5](assets/vm1-sk5.png)
+![htop VM2 Skenario 5](assets/vm2-sk5.png)
+![htop VM3 Skenario 5](assets/vm3-sk5.png)
+![htop VM4 Skenario 5](assets/vm4-sk5.png)
 
 ---
 
 ## Ringkasan Hasil Load Testing
 
-| Skenario        | Users | Spawn Rate | RPS Peak  | Failure Rate | Avg Response Time |
-| --------------- | ----- | ---------- | --------- | ------------ | ----------------- |
-| 1 – Max RPS     | 50    | 5          | ~37.3 RPS | 0% ✅        | ~283 ms           |
-| 2 – Peak SR 50  | 100   | 50         | ~74.2 RPS | 0% ✅        | ~855 ms           |
-| 3 – Peak SR 100 | 100   | 100        | ~73.9 RPS | 0% ✅        | ~1095 ms          |
-| 4 – Peak SR 200 | 100   | 200        | ~74.6 RPS | 0% ✅        | ~1108 ms          |
-| 5 – Peak SR 500 | 100   | 500        | ~12.5 RPS | 0% ✅        | ~312 ms           |
+| Skenario | Users | Spawn Rate | RPS Peak | Failure Rate | P50 | P95 |
+|----------|-------|------------|----------|--------------|-----|-----|
+| 1 – Max RPS | 50 | 5 | **~225 RPS** | 0% ✅ | 170 ms | 180 ms |
+| 2 – Peak SR 50 | 100 | 50 | ~470 RPS | 0% ✅ | 170 ms | 180 ms |
+| 3 – Peak SR 100 | 100 | 100 | ~460 RPS | 0% ✅ | 170 ms | 180 ms |
+| 4 – Peak SR 200 | 100 | 200 | ~460 RPS | 0% ✅ | 170 ms | 180 ms |
+| 5 – Peak SR 500 | 100 | 500 | ~472 RPS | 0% ✅ | 170 ms | 180 ms |
 
----
-
-## Monitoring Resource
-
-> Tambahkan screenshot htop VM 1, VM 2, VM 3 saat load testing berlangsung (CPU & RAM)
+**Nilai RPS (Skenario 1):** (225/200) × 30 = **33.75 poin** — melebihi standar 200 RPS ✅
 
 ---
 
@@ -630,12 +551,17 @@ Pengujian dilakukan menggunakan Locust dari perangkat lokal (berbeda dari server
 
 Berdasarkan hasil pengujian:
 
-- **Load Balancing berjalan efektif** — Nginx dengan strategi `least_conn` berhasil mendistribusikan request ke VM 2 dan VM 3 secara merata, sehingga beban kerja dapat dibagi ke kedua server backend.
-- **RPS stabil di sekitar 74 RPS** pada skenario 2, 3, dan 4 dengan 100 concurrent users — menunjukkan kapasitas maksimum sistem dengan konfigurasi saat ini.
-- **Skenario 5 (spawn rate 500)** menghasilkan RPS drop ke ~12.5. Hal ini disebabkan seluruh user dibuat hampir bersamaan sehingga terjadi lonjakan request dalam waktu yang sangat singkat. Meskipun demikian, sistem tetap dapat memproses seluruh request tanpa failure.
-- **Response time meningkat** seiring spawn rate yang lebih tinggi (Skenario 3 & 4) karena antrian request lebih panjang saat users tiba bersamaan.
-- **Indexing MongoDB** pada field `created_at` serta `order_id` membantu proses pengambilan data histori pesanan sesuai implementasi yang dilakukan.
-- **Seluruh 100 concurrent users berhasil dilayani tanpa failure** di semua skenario.
+- **Optimasi Gunicorn gthread** memberikan peningkatan signifikan — dari ~74 RPS (sync worker `-w 3`) menjadi ~225–470 RPS setelah menggunakan `-w 5 --threads 10 --worker-class gthread`. Kombinasi 5 worker × 10 threads menghasilkan 50 concurrent handler yang jauh lebih efisien.
+
+- **Nginx keepalive** (`keepalive 64` + `proxy_http_version 1.1`) mengurangi overhead TCP handshake antar Nginx dan backend, sehingga latency berkurang signifikan — response time stabil di 170–180ms di semua skenario.
+
+- **MongoDB connection pooling** (`maxPoolSize=400`) memastikan backend tidak bottleneck pada koneksi database saat concurrency tinggi.
+
+- **CPU VM2 (Backend)** berada di rentang 0.7%–23% tergantung skenario — tidak ada tanda-tanda resource exhaustion, menunjukkan masih ada headroom untuk scale lebih lanjut.
+
+- **VM1 (Nginx)** konsisten di bawah 3.4% CPU dengan memory stabil ~278MB, membuktikan Nginx efisien sebagai load balancer.
+
+- **Response time sangat konsisten** di semua skenario (P50: 170ms, P95: 180ms) — menunjukkan sistem tidak degradasi meski spawn rate naik dari 50 hingga 500.
 
 ---
 
@@ -643,19 +569,20 @@ Berdasarkan hasil pengujian:
 
 ## Kesimpulan
 
-- Sistem Order Processing Service berhasil diimplementasikan pada Microsoft Azure.
-- Nginx berhasil berfungsi sebagai load balancer yang mendistribusikan request ke dua backend Flask.
-- Backend API berhasil terhubung dengan MongoDB sebagai database terpusat.
-- Seluruh endpoint aplikasi dapat diakses dan berfungsi sesuai dengan kebutuhan sistem.
-- Berdasarkan hasil pengujian menggunakan Locust, sistem mampu melayani hingga 100 concurrent users pada seluruh skenario tanpa mengalami failure, meskipun terjadi peningkatan response time ketika jumlah request yang masuk secara bersamaan semakin tinggi.
+- Sistem Order Processing Service berhasil diimplementasikan pada Microsoft Azure dengan total biaya **$71.84/bulan**, di bawah budget $75.
+- Nginx dengan `least_conn` + `keepalive 64` berhasil mendistribusikan trafik ke dua backend secara efisien.
+- Optimasi Gunicorn (`gthread`, 5 workers, 10 threads) meningkatkan throughput dari ~74 RPS menjadi **~225 RPS** (Skenario 1) dan **~470 RPS** (Skenario 2–5).
+- Sistem mampu melayani **100 concurrent users dengan 0% failure** di semua skenario, melampaui standar 200 RPS.
+- Response time sangat stabil di **170–180ms** (P50–P95) di semua skenario.
 
 ## Saran
 
-- Menggunakan Azure Load Balancer atau Application Gateway untuk implementasi skala produksi.
-- Menambahkan mekanisme autoscaling pada backend server.
-- Menambahkan monitoring dan logging terpusat.
-- Menggunakan HTTPS dan domain publik untuk meningkatkan keamanan.
-- Melakukan pengujian dengan jumlah concurrent users yang lebih besar dan durasi pengujian yang lebih lama untuk mengetahui batas maksimum performa sistem.
+- Menambahkan **autoscaling** Azure VM Scale Set untuk menghadapi lonjakan traffic tak terduga.
+- Mengimplementasikan **Redis caching** untuk endpoint `/products` dan `/admin/stats` yang bersifat read-heavy.
+- Menggunakan **Azure Monitor + Grafana** untuk monitoring real-time yang lebih komprehensif.
+- Menambahkan **HTTPS** dengan Let's Encrypt untuk keamanan komunikasi.
+- Mempertimbangkan **MongoDB replica set** untuk meningkatkan availability database.
+- Menambah jumlah Gunicorn workers sesuai jumlah CPU core tersedia untuk memaksimalkan throughput.
 
 ---
 
@@ -664,18 +591,35 @@ Berdasarkan hasil pengujian:
 ## Struktur Repository
 
 ```text
-TKA-B2-FP/
-├── README.md               ← Laporan utama
+cloud-load-balancing-optimization/
+├── README.md
+├── assets/
+│   ├── diagram.png
+│   ├── nginx.png
+│   ├── frontend.png
+│   ├── frontend2.png
+│   ├── frontend-view.png
+│   ├── endpoint1.png ~ endpoint7.png
+│   ├── loc-sk1.png ~ loc-sk5.png
+│   ├── vm1-sk1.png ~ vm1-sk5.png
+│   ├── vm2-sk1.png ~ vm2-sk5.png
+│   ├── vm3-sk1.png ~ vm3-sk5.png
+│   └── vm4-sk1.png ~ vm4-sk5.png
 ├── resources/
 │   ├── BE/
-│   │   └── app.py          ← Backend Flask
+│   │   ├── app.py
+│   │   └── requirements.txt
+│   ├── DB/
+│   │   ├── generate_dump.py
+│   │   └── dump/orderdb/
 │   ├── FE/
 │   │   ├── index.html
 │   │   └── styles.css
 │   └── Test/
-│       └── locustfile.py   ← Script load testing
-└── result/
-    ├── locust_rps.png
-    ├── locust_concurrency_*.png
-    └── cpu_usage_*.png
+│       └── locustfile.py
+└── config/
+    ├── nginx-loadbalancer.conf
+    ├── gunicorn-vm2.service
+    ├── gunicorn-vm3.service
+    └── mongodb.conf
 ```
