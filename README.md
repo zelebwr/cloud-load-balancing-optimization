@@ -84,8 +84,6 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 
 # 3. Implementasi
 
-# 3. Implementasi
-
 ## 3.1 Deploy MongoDB
 
 ### Instalasi MongoDB
