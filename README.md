@@ -240,7 +240,7 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 sudo systemctl enable --now gunicorn-backend
 ```
-![Uploading image.png…]()
+<img width="332" height="613" alt="image" src="https://github.com/user-attachments/assets/7f1097f9-3d7f-48bf-9de9-cff5649b9652" />
 
 ---
 
@@ -256,6 +256,10 @@ Port 5000 pada kedua Backend API hanya mengizinkan koneksi dari VM 1 (Load Balan
 
 > VM 3
 <img width="1600" height="681" alt="08f06ea8-3fb3-45df-be7f-6568cc0e582a" src="https://github.com/user-attachments/assets/0458d87b-8aed-4b74-b20f-c1fa86e8b1d6" />
+
+> VM 4
+![Uploading image.png…]()
+
 
 ---
 
