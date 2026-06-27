@@ -61,11 +61,11 @@ Pada proyek ini dibangun sebuah sistem Order Processing Service berbasis Flask d
 
 | VM        | Role                     | OS            | vCPU | RAM  | Harga/Bulan |
 | --------- | ------------------------ | ------------- | ---- | ---- | ----------- |
-| VM 1      | Load Balancer + Frontend | Ubuntu Server | 2    | 4 GB | $17.96      |
+| VM 1      | Load Balancer + Frontend | Ubuntu Server | 2    | 1 GB | $9.56       |
 | VM 2      | Backend API 1            | Ubuntu Server | 2    | 4 GB | $17.96      |
 | VM 3      | Backend API 2            | Ubuntu Server | 2    | 4 GB | $17.96      |
 | VM 4      | MongoDB Database         | Ubuntu Server | 2    | 4 GB | $17.96      |
-| **Total** |                          |               |      |      | **$71.84**  |
+| **Total** |                          |               |      |      | **$63.44**  |
 
 ## Teknologi yang Digunakan
 
